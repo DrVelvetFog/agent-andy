@@ -26,3 +26,19 @@ DISMISSAL_SCOPE = "session"
 # Demo memory is SEEDED, not learned: owner-approved facts only, stated
 # honestly as seeded. Filled in by the owner before the demo; nothing invented.
 SEEDED_FACTS: list[str] = []
+
+# ---- Deterministic placeholder-checker triggers (case-insensitive substrings) ----
+# These are the fixed scope rules today's checker matches on. They stand in for
+# the open-weight model checker, not replace it: honest and auditable, but shallow.
+# An off-scope action is BLOCKED; an irreversible one is STAGED for a human.
+BLOCK_TRIGGERS = [
+    "post ", "tweet", "publish", "upload", "email ", "send to", "dm ",
+    "off the machine", "off-machine",            # nothing leaves the laptop
+    "comment on", "rate the", "judge the",       # never about people
+    "password", "credit card", "ssn", "api key", # never touch secret fields
+    "outside the task", "off-task",              # never act outside the active task
+]
+STAGE_TRIGGERS = [
+    "delete", "remove", "overwrite", "erase", "uninstall",
+    "wipe", "purge", "format ", "rm -", "drop ",
+]

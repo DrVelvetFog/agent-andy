@@ -18,7 +18,7 @@ Built solo for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4,
 | Part | What it is | Model |
 |---|---|---|
 | Brain | proposes actions from voice input | Muse Spark (`muse-spark-1.3`, Meta Model API) |
-| Checker | rules on every proposed action, locally | Muse Glimmer (open-weight, self-hosted) |
+| Checker | rules on every proposed action, locally | Muse Glimmer (open-weight, self-hosted) — *target; today a deterministic scope-rule placeholder* |
 | Eyes | verified observation for Witness receipts | SAM 3.1 (`sam-3.1`, Meta Model API) |
 | Voice in | speech to text | Muse Voice Transcribe |
 | Receipts | hash-chained, fail-closed action log | stdlib, no model — `receipts/` |
@@ -36,6 +36,18 @@ python3 scripts/day1_acceptance.py
 It writes three stub actions as receipts, verifies the chain, then flips one
 byte and shows verification fail. No network, no API key, no dependencies.
 
+## Try the gated-loop acceptance test
+
+```bash
+python3 scripts/gated_loop_acceptance.py
+```
+
+A full turn from text input: Muse Spark proposes a plan as JSON, the checker
+rules on every step, and each step is receipted *before* it runs. Shows an
+allowed action executing, a staged action held, a blocked action refused, the
+chain verifying, and a one-byte tamper rejected by name. Needs `MODEL_API_KEY`
+(the Spark call); the checker is local.
+
 ## Build log — what was built Oct 26 – Nov 4
 
 - **Oct 26 (kickoff day):** repo created; receipt chain (`receipts/chain.py`),
@@ -43,6 +55,15 @@ byte and shows verification fail. No network, no API key, no dependencies.
   (`agent/policy.py`), deterministic Day 1 checker, gated tool registry, loop
   sketch, and the Day 1 acceptance test (3 receipts verify; 1 flipped byte
   fails verification).
+- **Oct 26 (gated loop):** the loop now runs end to end — Muse Spark
+  (`agent/brain.py`) proposes a JSON plan from a text utterance, the checker
+  (`agent/checker.py`) rules allow / stage / block on every step, and each
+  step is receipted before it can run. Tools (`agent/tools.py`) are safe,
+  local, and sandboxed. The checker today is a **deterministic scope-rule
+  placeholder**, labelled as such — the open-weight model checker (a judge on
+  different weights than the actor) is a later step, and the open-weights
+  bonus will rest on a genuinely-run, verifiable open-weight checker, not a
+  claim. Acceptance: `scripts/gated_loop_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 
