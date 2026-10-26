@@ -12,9 +12,8 @@ PASS means all of these hold:
   6. Tampering with one byte makes the verifier reject the chain, naming the
      exact receipt.
 
-Makes one live Spark call (MODEL_API_KEY required). The checker is local and
-deterministic (a labelled placeholder — not yet the open-weight model checker),
-so no other network is needed.
+Makes one live Spark call (MODEL_API_KEY required). The checker is a local,
+deterministic policy engine, so no other network is needed.
 """
 
 from __future__ import annotations

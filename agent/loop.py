@@ -1,10 +1,10 @@
 """The agent loop.
 
 Perceive -> propose -> check -> act -> receipt, in that order, every turn.
-The brain (Muse Spark) proposes a plan; the checker (a local open-weight model
-on different weights, plus deterministic policy) rules on each step; the
-receipt chain records the proposal and every verdict; only an allowed step
-executes. Nothing reaches a tool without a receipt in front of it.
+The brain (Muse Spark) proposes a plan; the checker (a local, deterministic
+policy engine in its own trust domain) rules on each step; the receipt chain
+records the proposal and every verdict; only an allowed step executes. Nothing
+reaches a tool without a receipt in front of it.
 """
 
 from __future__ import annotations

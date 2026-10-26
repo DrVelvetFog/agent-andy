@@ -1,0 +1,64 @@
+# Agent Andy — policy
+#
+# This is the whole policy. The checker reads THIS file; there are no hidden
+# rules in code. A human can audit exactly what Andy will refuse, hold, or run.
+#
+# Each rule has:
+#   id      a short name (lands in the receipt)
+#   tier    block | stage | allow  (the outcome)
+#   reason  plain language, written to the receipt so anyone reading the chain
+#           sees WHY a step was refused, held, or allowed
+#   any     substrings matched case-insensitively against the action summary;
+#           any one match fires the rule
+#
+# Rules are evaluated top to bottom, FIRST MATCH WINS. List block rules before
+# stage rules so the stricter outcome wins when an action trips both. Anything
+# that matches no rule falls through to the default tier.
+#
+# The checker is deterministic by choice: no model, no network, no GPU in the
+# live loop. That makes every verdict fast, repeatable, and auditable — a
+# property we want for a live demo, not a limitation to apologise for.
+
+version = 1
+default_tier = "allow"
+default_reason = "within policy scope — safe local action in the active task"
+
+# ---- Risk tiers (for a human reading a receipt) ----
+[tiers.block]
+meaning = "off-scope; refused outright and never executed"
+[tiers.stage]
+meaning = "irreversible or destructive; held for a human, not executed"
+[tiers.allow]
+meaning = "safe local work within the task; executed and receipted"
+
+# ---- Rules: block first (stricter wins on overlap), then stage ----
+
+[[rules]]
+id = "exfiltration"
+tier = "block"
+reason = "would move data off this machine; nothing leaves the laptop"
+any = ["post ", "tweet", "publish", "upload", "email ", "send to", " dm ", "dm the", "off the machine", "off-machine", "exfiltrate", "leak ", "to a remote", "to an external", "to a public", "pastebin", "to the cloud"]
+
+[[rules]]
+id = "about-people"
+tier = "block"
+reason = "comments on or judges a person; Andy does not do that"
+any = ["comment on", "rate the", "judge the", "opinion of", "how they look", "how unattractive", "how overweight", "gossip"]
+
+[[rules]]
+id = "secret-fields"
+tier = "block"
+reason = "reads or acts on a credential or secret field"
+any = ["password", "credit card", "ssn", "api key", "secret key", "private key", "ssh key", "seed phrase", "2fa", "one-time code", "otp", "access token"]
+
+[[rules]]
+id = "off-task"
+tier = "block"
+reason = "acts outside the owner's active task"
+any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "ignore previous instructions"]
+
+[[rules]]
+id = "destructive"
+tier = "stage"
+reason = "irreversible or destructive; a human must confirm before it runs"
+any = ["delete", "remove", "overwrite", "erase", "uninstall", "wipe", "purge", "format ", "rm -", "drop ", "factory reset", "reformat"]
