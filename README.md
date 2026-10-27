@@ -2,6 +2,11 @@
 
 A voice-driven personal agent that cannot act without leaving a receipt.
 
+**What it's for:** an agent that checks a local rule before you act, and *proves*
+its answer. It ships with one example — whether you can legally metal-detect at a
+given spot, where a wrong "allowed" can mean a fine. Rule-checking is the product;
+detecting is the example.
+
 Every action Andy takes — a tool call, an observation, even an unprompted
 remark — is written to a hash-chained receipt log *as part of taking it*, and
 a separate checker — a deterministic policy engine in its own trust domain,
@@ -20,6 +25,7 @@ Built solo for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4,
 |---|---|---|
 | Brain | proposes actions from voice input | Muse Spark (`muse-spark-1.3`, Meta Model API) |
 | Checker | rules on every proposed action, in its own trust domain | **Deterministic policy engine** — local, no model, no network (`agent/policy.toml`) |
+| Rule check | answers "can I detect here?" with a cited source, or stages it | deterministic lookup + evidence gate — `agent/detect.py` |
 | Eyes | verified observation for Witness receipts | SAM 3.1 (`sam-3.1`, Meta Model API) |
 | Voice in | speech to text | Muse Voice Transcribe |
 | Receipts | hash-chained, fail-closed action log | stdlib, no model — `receipts/` |
@@ -59,6 +65,18 @@ Runs the deterministic checker against real attack and legitimate-task cases
 and prints a measured score — no network, no model. Current: 12/12 attacks
 caught (blocked or staged), 8/8 legitimate tasks allowed, 0 blocked.
 
+## Try the detect-here test
+
+```bash
+python3 scripts/detect_acceptance.py
+```
+
+Runs the vetted location sample through the lookup and evidence gate: six places
+answer with a cited primary source, Jekyll (a draft-only source) answers with a
+caveat and stages under strict mode, and Tybee — claimed allowed by forums but
+with no primary rule found — stages as unverified. A staged answer is the point:
+it proves Andy held back instead of guessing. No network, no model.
+
 ## Build log — what was built Oct 26 – Nov 4
 
 - **Oct 26 (kickoff day):** repo created; receipt chain (`receipts/chain.py`),
@@ -87,6 +105,17 @@ caught (blocked or staged), 8/8 legitimate tasks allowed, 0 blocked.
   code path, separate rules, receipts before execution. Measured by
   `scripts/policy_acceptance.py`: 12/12 attack cases caught (blocked or staged),
   8/8 legitimate tasks allowed, 0 blocked.
+- **Oct 27 (rule check — "can I detect here?"):** Andy answers whether metal
+  detecting is allowed at a place, from a vetted sample of eight locations
+  (`data/detect_sample.toml`, authored new for the demo — not imported from any
+  site). Two axes land in every receipt: the **rule verdict** (allowed /
+  with-registration / limited / restricted) and the **evidence gate** (a cited
+  primary source answers; no primary source stages). Tybee Island — forums claim
+  "allowed", but no city rule was found — is **staged as unverified** rather than
+  answered, which is the point of the whole thing. No inference across places; a
+  place outside the set is staged, not guessed. `agent/detect.py`, acceptance
+  `scripts/detect_acceptance.py`. Deterministic and local; the voice front end
+  (Muse Voice Transcribe → Muse Spark picks the place) is the next layer.
 
 ## Prior inspiration — not claimed as hackathon work
 

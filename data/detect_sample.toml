@@ -1,0 +1,114 @@
+# Agent Andy — "can I detect here?" demo sample
+#
+# Authored NEW for the hackathon demo (vetted by Cosmo, 2026-10-27). Nothing here
+# is imported from wheretodetect.org pages, verdicts, or copy — place names overlap
+# only because these are public places. Every verdict below was checked against the
+# PRIMARY source named, on 2026-10-27, and is quoted or paraphrased from that source
+# only.
+#
+# Hard rules (enforced by agent/detect.py):
+#   - Andy answers a verdict ONLY when a cited primary source supports it. Anything
+#     uncertain, conflicting, or not in this set is STAGED as "unverified — needs a
+#     human", never a confident guess.
+#   - Two axes, kept distinct in every receipt: the RULE VERDICT (what the rule says)
+#     and the EVIDENCE TIER (whether Andy is entitled to report it). A staged receipt
+#     is a success — it proves the gate fired.
+#   - No expansion by inference: one beach is not the next beach, one park is not all
+#     parks in its system. A place not listed here is staged, not guessed.
+#   - This is demo data, not legal advice and not a general rule database.
+#   - RECHECK every source before the Nov 9 live final. A sample verified Oct 27 is
+#     not a promise about Nov 9.
+#
+# evidence tiers: "primary" (cited primary source -> answer) |
+#                 "primary_draft" (primary but a draft -> answer with caveat, or
+#                                  STAGE under strict mode) |
+#                 "absent" (no primary found -> always stage).
+
+[[locations]]
+names = ["myrtle beach", "myrtle beach public beach", "myrtle beach sc", "myrtle beach south carolina"]
+place = "Myrtle Beach public beach, South Carolina"
+verdict = "allowed"
+evidence = "primary"
+conditions = "Allowed on the public beach only — NOT in the dunes, the street ends, or any other public property."
+source_name = "City of Myrtle Beach, official beach laws page"
+source_url = "https://www.cityofmyrtlebeach.com/news_detail_T6_R462.php"
+source_quote = "Metal detecting is allowed on the public beach, but NOT in the dunes, the street ends or any other public property."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["orange beach", "orange beach public beach", "orange beach al", "orange beach alabama"]
+place = "Orange Beach public beach, Alabama"
+verdict = "allowed"
+evidence = "primary"
+conditions = "Allowed on the beach; the city requests holes be returned to natural grade after investigation."
+source_name = "City of Orange Beach, Parks and Recreation FAQs"
+source_url = "https://al-orangebeach.civicplus.com/m/faq"
+source_quote = "Metal detecting is allowed on the beach but the City respectfully requests that holes be returned to natural grade following the investigation."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["lake of the ozarks", "lake of the ozarks state park", "lake of the ozarks state park beach", "lake of the ozarks mo"]
+place = "Lake of the Ozarks State Park designated beach, Missouri"
+verdict = "allowed_with_registration"
+evidence = "primary"
+conditions = "Designated beaches only, with yearly registration completed and proof carried. Lake of the Ozarks hours: 7 a.m.–9 a.m. Memorial Day to Labor Day, daylight hours Labor Day to Memorial Day. If registration is not confirmed, stage it."
+source_name = "Missouri State Parks, Metal Detecting Registration Form page"
+source_url = "https://mostateparks.com/form/metal-detecting-registration-form"
+source_quote = "Metal detecting activities are allowed on designated beaches in certain Missouri state parks, within the constraints shown below. This registration must be completed each calendar year."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["honeymoon island", "honeymoon island state park", "honeymoon island fl", "honeymoon island florida"]
+place = "Honeymoon Island State Park, Florida"
+verdict = "limited"
+evidence = "primary"
+conditions = "Prohibited on all Florida state park land EXCEPT coastal parks, and there only in a park-manager-designated zone between the toe of the dune and the high-water line. Never submerged; objects over 50 years old may not be kept. If the manager-designated zone for this visit is not confirmed, stage it."
+source_name = "Florida State Parks, official FAQ, section 1.6"
+source_url = "https://www.floridastateparks.org/plan-your-visit/faqs"
+source_quote = "metal detecting is prohibited on all state park lands, except for coastal parks. In these parks, metal detecting may occur within certain beach areas located between the toe of the dune and the high-water line, as designated by the park manager. Metal detecting in submerged locations is not permitted."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["jekyll island", "jekyll", "jekyll island ga", "jekyll island georgia"]
+place = "Jekyll Island, Georgia"
+verdict = "restricted"
+evidence = "primary_draft"
+conditions = "Prohibited islandwide: detectors, magnetometers, side scan sonar, sub-bottom profilers, magnets, or any device for detecting metals/minerals/artifacts or treasure hunting, except a device broken down and stored, navigation equipment, and authorized scientific or administrative equipment."
+source_name = "Jekyll Island Authority code text (Chapter E), code revision document"
+source_url = "https://www.jekyllisland.com/wp-content/uploads/2022/05/20220531_Code-Revision-Revised-First-Reading.r.pdf"
+source_quote = "Use of a mineral or metal detector, magnetometer, side scan sonar, sub-bottom profiler, magnet, or any other device for the detection of metals, minerals, artifacts, or lost articles or for treasure hunting is prohibited."
+caveat = "Primary source is a 2022 revised first-reading draft; JIA safety publications repeat the same prohibition. Enacted ordinance not yet pinned."
+recheck_by = "2026-11-09"
+checked = "2026-10-27"
+
+[[locations]]
+names = ["dauphin island", "dauphin island public beach", "dauphin island al", "dauphin island alabama"]
+place = "Dauphin Island public beach, Alabama"
+verdict = "restricted"
+evidence = "primary"
+conditions = "Prohibited on the public beach (rule 12 of the town's public beach rules)."
+source_name = "Town of Dauphin Island, official beaches page, public beach rules"
+source_url = "https://www.townofdauphinisland.org/beaches"
+source_quote = "No metal detecting."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["ulysses s. grant national historic site", "ulysses s grant national historic site", "ulysses grant national historic site", "grant national historic site", "ulysses grant", "grants farm historic site"]
+place = "Ulysses S. Grant National Historic Site, St. Louis, Missouri"
+verdict = "restricted"
+evidence = "primary"
+conditions = "Prohibited. Possessing or using a metal detector is prohibited on National Park Service land under 36 CFR 2.1(a)(7). This is a systemwide NPS rule, not unique to this site."
+source_name = "National Park Service, Superintendent's Compendium for Ulysses S. Grant NHS (restating 36 CFR 2.1(a)(7))"
+source_url = "https://www.nps.gov/ulsg/learn/management/superintendent-s-compendium.htm"
+source_quote = "Possessing or using a mineral or metal detector, magnetometer, side scan sonar, other metal detecting device, or sub bottom profiler."
+checked = "2026-10-27"
+
+[[locations]]
+names = ["tybee island", "tybee", "tybee island beach", "tybee island ga", "tybee island georgia"]
+place = "Tybee Island beach, Georgia"
+verdict = "unverified"
+evidence = "absent"
+staging_reason = "Popular sources and forums claim detecting is allowed, but no City of Tybee Island primary rule granting it was found on 2026-10-27. Absence in a search is not proof no rule exists — this needs a human, and a confident 'allowed' from forum posts is exactly the failure mode the gate exists to catch."
+source_name = "City of Tybee Island citations/ordinances and beach rules pages (no detecting clause found)"
+source_url = "https://www.cityoftybee.org/398/Citations-Ordinances"
+checked = "2026-10-27"
