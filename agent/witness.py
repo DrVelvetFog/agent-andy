@@ -65,7 +65,12 @@ def record(chain, item: str, concept: str, photo_hash: str, verified: bool,
 def observe_and_verify(chain, item: str, concept: str, image_path: str,
                        min_coverage: float = MIN_COVERAGE, strict: bool = False) -> dict:
     """Segment a real photo for `concept` and receipt the verified/unverified result."""
-    photo_hash = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
+    try:
+        photo_hash = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
+    except OSError as e:
+        # No photo, or an unreadable one, is not a pass — fail closed, named.
+        return record(chain, item, concept, "unavailable", False,
+                      f"photo unreadable ({type(e).__name__}) — unverified (fail closed)")
     try:
         seg = eyes.segment(image_path, concept)
     except Exception as e:

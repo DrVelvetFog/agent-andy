@@ -58,6 +58,18 @@ reason = "acts outside the owner's active task"
 any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "ignore previous instructions"]
 
 [[rules]]
+id = "financial"
+tier = "block"
+reason = "moves money off the owner's accounts; Andy never transfers funds"
+any = ["wire ", "wire $", "send money", "send $", "transfer $", "transfer money", "transfer funds", "to account ", "venmo", "zelle", "paypal", "western union", "pay $", "bitcoin to", "crypto to", "send cash"]
+
+[[rules]]
+id = "system-command"
+tier = "block"
+reason = "runs shell or system commands outside Andy's tools; off-scope and unsafe"
+any = ["sudo", "rm -rf", "curl ", "wget ", "| sh", "| bash", "bash -c", "chmod ", "/etc/", "reverse shell", "nc -", "powershell", "run the installer"]
+
+[[rules]]
 id = "destructive"
 tier = "stage"
 reason = "irreversible or destructive; a human must confirm before it runs"
