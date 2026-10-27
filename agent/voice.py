@@ -9,12 +9,16 @@ Spark gated loop. Voice gets no shortcut past the checker: the action a spoken
 request produces is allowed / staged / blocked and receipted exactly like a
 typed one.
 
-Voice-OUT: Meta has no text-to-speech endpoint, so Andy's spoken reply is TEXT
-today, returned through a `speak()` seam where a real engine can plug in later
-without touching the loop. Nothing is installed and no TTS is faked (the engine
-choice is still open). A spoken reply, when shown, obeys the locked daemon
-speech rule: only during an active task, above the checker bar, one dismissal
-silences the session, never about people, text fields, or off-task content.
+Voice-OUT: Meta has no text-to-speech endpoint, so the voice is the one part of
+the loop that is not a Meta model and does not run on this laptop — Andy's words
+are RENDERED by ElevenLabs (`agent/tts.py`) from text it already decided and
+receipted. That is stated, not hidden: a `voice_output` receipt records the
+engine, model, voice, a hash of the audio, and `rendered: "external"`, so the
+chain shows exactly where the voice came from. Output is text AND voice together
+by default; if the key is missing or the call fails, Andy falls back to text and
+never fakes a voice. A spoken reply obeys the locked daemon speech rule: only
+during an active task, above the checker bar, one dismissal silences the
+session, never about people, text fields, or off-task content.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from . import detect, loop, witness
+from . import detect, loop, tts, witness
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
@@ -87,10 +91,67 @@ def route(transcript: str) -> tuple[str, str | None]:
     return "general", t
 
 
-def speak(text: str) -> dict:
-    """Voice-OUT seam. Today it returns the text to show — no TTS is called and
-    none is faked. A real engine plugs in HERE later without touching the loop."""
-    return {"text": text, "tts_engine": None, "spoken_aloud": False}
+def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
+          voice_id: str | None = None, model_id: str | None = None) -> dict:
+    """Voice-OUT: show the text AND render it to speech with ElevenLabs. Text is
+    always returned; the voice is best-effort — if the key is missing or the call
+    fails, Andy falls back to text and says so, never faking a voice. When a chain
+    is given, a `voice_output` receipt records the engine and a hash of the audio,
+    so the spoken reply carries its own provenance. `voice="auto"` voices only when
+    a key is reachable; `play=True` also plays it aloud (off in tests)."""
+    want_voice = tts.available() if voice == "auto" else bool(voice)
+    result = {"text": text, "tts_engine": None, "voiced": False, "spoken_aloud": False}
+
+    if want_voice:
+        synth = tts.synthesize(text, voice_id=voice_id or tts.DEFAULT_VOICE_ID,
+                               model_id=model_id or tts.DEFAULT_MODEL)
+        if synth.get("ok"):
+            result.update({
+                "tts_engine": "elevenlabs", "voiced": True,
+                "audio_path": synth["audio_path"], "audio_sha256": synth["audio_sha256"],
+                "voice_id": synth["voice_id"], "model_id": synth["model_id"],
+                "char_count": synth.get("char_count"),
+            })
+            if play:
+                result["spoken_aloud"] = _play(synth["audio_path"])
+        else:
+            result["tts_error"] = synth.get("error")
+
+    if chain is not None:
+        chain.append({
+            "type": "voice_output",
+            "summary": f"spoke: {text[:70]}",
+            "text": text,
+            "tts_engine": result["tts_engine"],
+            "tts_model": result.get("model_id"),
+            "voice_id": result.get("voice_id"),
+            "audio_sha256": result.get("audio_sha256"),
+            "audio_path": result.get("audio_path"),
+            "char_count": result.get("char_count"),
+            "rendered": "external" if result["tts_engine"] else None,
+            "voiced": result["voiced"],
+            "spoken_aloud": result["spoken_aloud"],
+            "reason": (result.get("tts_error")
+                       or ("rendered by ElevenLabs from text Andy already decided and receipted"
+                           if result["voiced"] else "text only — no voice engine reachable")),
+        })
+    return result
+
+
+def _play(rel_path: str) -> bool:
+    """Play a rendered clip aloud via macOS `afplay`. Local playback only; returns
+    False (never raises) if it isn't available, so a missing player can't break a run."""
+    import shutil
+    import subprocess
+    player = shutil.which("afplay")
+    if not player:
+        return False
+    path = rel_path if Path(rel_path).is_absolute() else str(Path(__file__).resolve().parent.parent / rel_path)
+    try:
+        subprocess.run([player, path], check=True, timeout=120)
+        return True
+    except Exception:
+        return False
 
 
 def _default_photos() -> list[tuple[str, str, str]]:
@@ -116,10 +177,12 @@ def _detect_reply(o: dict) -> str:
     return f"I'm staging that one as unverified — {o['staging_reason']}"
 
 
-def handle(chain, transcript: str, source: str, photos=None, strict: bool = False) -> dict:
+def handle(chain, transcript: str, source: str, photos=None, strict: bool = False,
+           voice: str | bool = "auto") -> dict:
     """Route one transcript (live or injected) through the gated paths. The
     transcript's source is receipted so a reader can tell a real transcription
-    from an injected one."""
+    from an injected one. `voice` is passed to speak() — pass voice=False in
+    offline tests so routing/gating runs without calling the TTS API."""
     chain.append({
         "type": "voice_input",
         "summary": f"heard ({source}): {transcript[:80]}",
@@ -132,14 +195,15 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     if intent == "detect":
         res = detect.answer(chain, arg, strict=strict)
         return {"intent": "detect", "source": source, "place": arg,
-                "result": res, "reply": speak(_detect_reply(res["outcome"]))}
+                "result": res, "reply": speak(_detect_reply(res["outcome"]), chain, voice=voice)}
     if intent == "witness":
         items = photos or _default_photos()
         results = [witness.observe_and_verify(chain, it, cc, p) for it, cc, p in items]
         fin = witness.finalize(chain, results)
         reply = ("Box ready to ship." if fin["ready_to_ship"]
                  else f"Not shipped — unverified: {', '.join(fin['unverified_items'])}.")
-        return {"intent": "witness", "source": source, "result": fin, "reply": speak(reply)}
+        return {"intent": "witness", "source": source, "result": fin, "reply": speak(reply, chain, voice=voice)}
 
     outcomes = loop.run_turn(chain, transcript)  # the existing Spark plan + gated loop
-    return {"intent": "general", "source": source, "result": outcomes, "reply": speak("Done.")}
+    return {"intent": "general", "source": source, "result": outcomes,
+            "reply": speak("Done.", chain, voice=voice)}

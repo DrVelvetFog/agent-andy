@@ -3,3 +3,5 @@ __pycache__/
 runs/
 .env
 .DS_Store
+# Local secrets written by `elevenlabs onboard`
+/.env.local

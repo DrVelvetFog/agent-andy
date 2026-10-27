@@ -55,7 +55,7 @@ def detect_case(chain, cls, name, query, strict=False):
 
 
 def voice_case(chain, cls, name, transcript):
-    res = voice.handle(chain, transcript, voice.INJECTED)
+    res = voice.handle(chain, transcript, voice.INJECTED, voice=False)
     o = res["result"]["outcome"]
     reason = o["staging_reason"] or f"verdict={o['rule_verdict']}"
     rec(cls, name, o["decision"], reason, o["decision"] == detect.STAGED)

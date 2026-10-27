@@ -46,12 +46,12 @@ def main() -> int:
 
     print(f"TRANSCRIPTION SOURCE: {src} (labeled — not presented as live)\n")
 
-    a = voice.handle(chain, "can I detect at Myrtle Beach?", src)
+    a = voice.handle(chain, "can I detect at Myrtle Beach?", src, voice=False)
     print(f"  a. detect/Myrtle  -> {a['result']['decision']:7}  reply: {a['reply']['text']}")
-    b = voice.handle(chain, "can I detect at Tybee Island?", src)
+    b = voice.handle(chain, "can I detect at Tybee Island?", src, voice=False)
     print(f"  b. detect/Tybee   -> {b['result']['decision']:7}  reply: {b['reply']['text']}")
     if photos_ready:
-        c = voice.handle(chain, "witness my packing list", src)
+        c = voice.handle(chain, "witness my packing list", src, voice=False)
         print(f"  c. witness        -> {'READY TO SHIP' if c['result']['ready_to_ship'] else 'NOT shipped'}"
               f"  reply: {c['reply']['text']}")
     else:

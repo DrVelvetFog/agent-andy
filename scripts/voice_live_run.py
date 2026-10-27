@@ -41,7 +41,7 @@ def main() -> int:
             continue
         tr = voice.transcribe_file(str(path))
         transcript = tr["transcript"]
-        res = voice.handle(chain, transcript, voice.LIVE)
+        res = voice.handle(chain, transcript, voice.LIVE, voice=True)
         if res["intent"] == "detect":
             outcome = f"{res['result']['decision']}"
         elif res["intent"] == "witness":

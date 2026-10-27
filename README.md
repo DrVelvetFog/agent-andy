@@ -90,6 +90,16 @@ the same allow / stage / block gating as a typed one. "Can I detect at Myrtle
 Beach?" is answered with a citation; "...Tybee Island?" is staged; "witness my
 packing list" ships only if every item verifies.
 
+Andy answers in **text and voice together**. Meta has no text-to-speech, so the
+voice is the one part of the loop that is *not* a Meta model and *not* local:
+`agent/tts.py` renders the reply with ElevenLabs (`eleven_v4`) over the public
+REST API — same stdlib `urllib`, no SDK. That is stated, not hidden: a
+`voice_output` receipt records the engine, model, voice, and a hash of the audio
+(`rendered: "external"`), so the chain shows where the voice came from. The key
+lives in `.env.local` (gitignored, read from `ELEVENLABS_API_KEY`); if it is
+missing or the call fails, Andy falls back to text and never fakes a voice.
+*Next:* pick voice vs. text automatically from whether headphones are connected.
+
 ## See the receipts — live viewer
 
 ```bash
@@ -155,14 +165,22 @@ API key: `python3 scripts/day1_acceptance.py`.)
   SAME gated paths as typed input (detect, witness, or the Spark loop); voice
   gets no shortcut past the checker. Real run on recorded clips: "can I detect at
   Myrtle Beach?" → allowed + cited, "...Tybee Island?" → staged, "witness my
-  packing list" → ready to ship. Voice-out is a text `speak()` seam — Meta has
-  no TTS and none is faked. `scripts/voice_acceptance.py`, `scripts/voice_live_run.py`.
+  packing list" → ready to ship. Voice-out began as a text `speak()` seam — Meta
+  has no TTS — now filled by ElevenLabs (see below). `scripts/voice_acceptance.py`,
+  `scripts/voice_live_run.py`.
 - **Oct 27 (receipt viewer):** `viewer/andy_viewer.py` — a thin local window that
   reads the real `runs/` chains and renders them as a verdict-colored timeline
   (allow / stage / block). **Verify** calls the project's own `receipts/verify.py`
   (no logic re-implemented here — the page reports what the real verifier says);
   **Flip one byte** tampers a throwaway copy and shows verification fail by receipt
   number, the real file untouched. Stdlib only, `127.0.0.1` only. `viewer/index.html`.
+- **Oct 27 (voice-out):** `agent/tts.py` fills the `speak()` seam with ElevenLabs
+  (`eleven_v4`), called over the public REST API with stdlib `urllib` — no SDK, no
+  new dependency, like every other model client here. Output is text + voice
+  together; a `voice_output` receipt stamps the engine, model, voice, and a hash
+  of the audio (`rendered: "external"`), so the one non-local, non-Meta part of the
+  loop declares itself in the chain. Missing key or failed call → text fallback,
+  never a faked voice. Key read from `ELEVENLABS_API_KEY` (`.env.local`, gitignored).
 
 ## Prior inspiration — not claimed as hackathon work
 
