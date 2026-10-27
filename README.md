@@ -90,6 +90,21 @@ the same allow / stage / block gating as a typed one. "Can I detect at Myrtle
 Beach?" is answered with a citation; "...Tybee Island?" is staged; "witness my
 packing list" ships only if every item verifies.
 
+## See the receipts — live viewer
+
+```bash
+python3 viewer/andy_viewer.py          # then open http://127.0.0.1:8799
+```
+
+A local window onto the real chains under `runs/`. Each receipt lands on a
+timeline, colored by the checker's verdict — green *allow* (ran), amber *stage*
+(held for a human), red *block* (refused). **Verify** runs the project's own
+`receipts/verify.py`, recomputing every hash from genesis; **Flip one byte**
+changes one character of one receipt in a throwaway copy — the real chain is
+never touched — and verification fails, by receipt number. Stdlib only, binds to
+`127.0.0.1` only; nothing leaves the laptop. (No chains yet? Generate one with no
+API key: `python3 scripts/day1_acceptance.py`.)
+
 ## Build log — what was built Oct 26 – Nov 4
 
 - **Oct 26 (kickoff day):** repo created; receipt chain (`receipts/chain.py`),
@@ -142,6 +157,12 @@ packing list" ships only if every item verifies.
   Myrtle Beach?" → allowed + cited, "...Tybee Island?" → staged, "witness my
   packing list" → ready to ship. Voice-out is a text `speak()` seam — Meta has
   no TTS and none is faked. `scripts/voice_acceptance.py`, `scripts/voice_live_run.py`.
+- **Oct 27 (receipt viewer):** `viewer/andy_viewer.py` — a thin local window that
+  reads the real `runs/` chains and renders them as a verdict-colored timeline
+  (allow / stage / block). **Verify** calls the project's own `receipts/verify.py`
+  (no logic re-implemented here — the page reports what the real verifier says);
+  **Flip one byte** tampers a throwaway copy and shows verification fail by receipt
+  number, the real file untouched. Stdlib only, `127.0.0.1` only. `viewer/index.html`.
 
 ## Prior inspiration — not claimed as hackathon work
 
