@@ -77,6 +77,19 @@ caveat and stages under strict mode, and Tybee — claimed allowed by forums but
 with no primary rule found — stages as unverified. A staged answer is the point:
 it proves Andy held back instead of guessing. No network, no model.
 
+## Try the voice test
+
+```bash
+python3 scripts/voice_acceptance.py    # the 3 paths via labeled transcript injection
+python3 scripts/voice_live_run.py      # real muse-voice-transcribe on recorded clips
+```
+
+A spoken request enters `agent/voice.py`, is receipted with its source
+(`live-transcribe` or `transcript-injected`, never blurred), and runs through
+the same allow / stage / block gating as a typed one. "Can I detect at Myrtle
+Beach?" is answered with a citation; "...Tybee Island?" is staged; "witness my
+packing list" ships only if every item verifies.
+
 ## Build log — what was built Oct 26 – Nov 4
 
 - **Oct 26 (kickoff day):** repo created; receipt chain (`receipts/chain.py`),
@@ -114,8 +127,21 @@ it proves Andy held back instead of guessing. No network, no model.
   "allowed", but no city rule was found — is **staged as unverified** rather than
   answered, which is the point of the whole thing. No inference across places; a
   place outside the set is staged, not guessed. `agent/detect.py`, acceptance
-  `scripts/detect_acceptance.py`. Deterministic and local; the voice front end
-  (Muse Voice Transcribe → Muse Spark picks the place) is the next layer.
+  `scripts/detect_acceptance.py`. Deterministic and local.
+- **Oct 27 (Witness — verified observation):** `agent/eyes.py` calls SAM 3.1
+  and `agent/witness.py` runs a packing checklist — each item verifies only if
+  SAM segments it in a real photo, the photo hash + mask id land in the receipt,
+  and the box is marked shipped only when every item verifies (fail-closed,
+  naming any that doesn't). Proven on real Razr photos: cable, book, charger all
+  segmented → READY TO SHIP. `scripts/witness_acceptance.py`.
+- **Oct 27 (voice-in):** `agent/voice.py` is the spoken entry point. A transcript
+  — from Muse Voice Transcribe (`muse-voice-transcribe-1.0`, the file endpoint)
+  or injected for a test — is receipted with its source and routed through the
+  SAME gated paths as typed input (detect, witness, or the Spark loop); voice
+  gets no shortcut past the checker. Real run on recorded clips: "can I detect at
+  Myrtle Beach?" → allowed + cited, "...Tybee Island?" → staged, "witness my
+  packing list" → ready to ship. Voice-out is a text `speak()` seam — Meta has
+  no TTS and none is faked. `scripts/voice_acceptance.py`, `scripts/voice_live_run.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

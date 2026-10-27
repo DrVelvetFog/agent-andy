@@ -19,7 +19,11 @@ silences the session, never about people, text fields, or off-task content.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import urllib.request
+import uuid
 from pathlib import Path
 
 from . import detect, loop, witness
@@ -27,6 +31,38 @@ from . import detect, loop, witness
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
 TRANSCRIBE_MODEL = "muse-voice-transcribe-1.0"
+BASE_URL = "https://api.meta.ai/v1"
+
+
+def transcribe_file(wav_path: str, mode: str = "PUSH_TO_TALK", timeout: float = 180.0) -> dict:
+    """Real voice-in: POST a recording to Muse Voice Transcribe's file endpoint
+    (/v1/asr/transcribe) and return its transcript. The audio must be a RIFF/WAVE
+    container, mono, 16-bit PCM at 16 or 24 kHz. Stdlib multipart, no deps."""
+    key = os.environ.get("MODEL_API_KEY")
+    if not key:
+        raise RuntimeError("MODEL_API_KEY is not set")
+    audio = Path(wav_path).read_bytes()
+    boundary = "----andy" + uuid.uuid4().hex
+    req_json = json.dumps({"mode": mode, "model": TRANSCRIBE_MODEL, "audioEncoding": "WAV"})
+    body = b"".join([
+        f'--{boundary}\r\nContent-Disposition: form-data; name="request"\r\n'
+        f'Content-Type: application/json\r\n\r\n{req_json}\r\n'.encode("utf-8"),
+        f'--{boundary}\r\nContent-Disposition: form-data; name="audio"; '
+        f'filename="audio.wav"\r\nContent-Type: audio/wav\r\n\r\n'.encode("utf-8"),
+        audio,
+        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+    ])
+    req = urllib.request.Request(
+        f"{BASE_URL}/asr/transcribe",
+        data=body,
+        headers={"Authorization": f"Bearer {key}",
+                 "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return {"transcript": (data.get("transcript") or "").strip(),
+            "duration_ms": data.get("audioDurationMs"), "raw": data}
 
 _WITNESS_DIR = Path(__file__).resolve().parent.parent / "runs" / "witness"
 
