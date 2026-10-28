@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Verify-on-demand acceptance — Andy earns knowledge, with proof, on approval.
+"""Verify-on-demand acceptance (hardened) — the self-growing loop, kept honest.
 
-The properties that keep this honest, every one tested:
+Extraction is exercised across real page SHAPES, not just the demo page, and the
+fetch path is restricted to the site index Andy already holds. Every case the
+hardening pass must pass, by name:
 
-  1. Extraction is DETERMINISTIC and fail-closed: a templated page yields the
-     verdict, a VERBATIM rule quote, the named source and the date; a page whose
-     structure is missing yields nothing (no guess).
-  2. A quote Andy reports is a verbatim substring of the page it fetched.
-  3. Fetch and extract are STAGED for the owner, not acted on: the place does not
-     answer until the owner approves it.
-  4. On approval the place answers as a CONFIRMED SECONDARY — it names a primary,
-     is labeled "I read the site, not the ordinance", and is never Tier-1 grade.
-  5. A fetch or extraction that fails leaves the place staged, not promoted.
-  6. Every step is a receipt (verify_fetch / verify_extract / verify_promote) and
-     the chain verifies.
+  a. standard location page -> verdict, verbatim quote, named source, date extract
+  b. multiple verdict words  -> the verdict anchored to "Last verified" wins
+  c. missing "Last verified" -> fail closed, missing field named, never guessed
+  d. missing named source    -> fail closed, never guessed
+  e. a law/club/guide page   -> fail closed, never promoted
+  f. a fetch failure         -> staged with the fetch error, never promoted
+  g. out-of-index URL        -> refused WITHOUT a fetch ("URL not in site index")
+  h. confirmed-secondary caveat present in BOTH the reply and the receipt
 
-The core runs hermetically against a fixture page (fetch monkeypatched); one live
-fetch of a real page is reported at the end as a bonus.
+Core runs hermetically: a real index URL with fetch() monkeypatched to return a
+fixture, so the fetch restriction passes while the page content stays fixed. One
+live fetch of a real page is reported at the end.
 """
 
 from __future__ import annotations
@@ -28,31 +28,57 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agent import detect, verify_source as vs  # noqa: E402
+from agent import detect, tier2, verify_source as vs, voice  # noqa: E402
 from agent.verify_source import KnowledgeStore  # noqa: E402
 from receipts import ReceiptChain, verify_chain  # noqa: E402
 
 RUNS = ROOT / "runs"
 CHAIN = RUNS / "verify-receipts.jsonl"
+# A real location URL that IS in the index, so the fetch restriction passes.
+INDEX_URL = "https://wheretodetect.org/metal-detecting/florida/daytona-beach/"
 
-FIXTURE = """<html><body>
+STANDARD = """<html><body>
 <h1>Can You Metal Detect at Testville Beach? Yes</h1>
 <div>Testville County &middot; Central &middot; City beach ✅ Allowed Last verified: 2026-09-15</div>
 <h2>The rules</h2>
 <p>The Testville Beach Code says nothing about metal detecting and permits it on the public beach.</p>
 <div>Permit: Not required</div>
+<p>More spots near Testville 🔴 Prohibited Testville National Seashore — federal land.</p>
 <p>Source: Testville County Code of Ordinances, Ch. 20, Sec. 20-6. Verify against the county.</p>
 <p>Not legal advice.</p></body></html>"""
 
-GARBAGE = "<html><body><h1>Hello</h1><p>nothing structured here</p></body></html>"
+MULTI_VERDICT = """<html><body>
+<h1>Can You Metal Detect at Multi Beach?</h1>
+<p>Nearby parks are Prohibited and some areas are Restricted, but this beach is different.</p>
+<div>Multi County ✅ Allowed Last verified: 2026-08-01</div>
+<h2>The rules</h2><p>The Multi County code allows detecting on the public beach.</p>
+<div>Permit: Not required</div>
+<p>More spots near Multi 🔴 Prohibited Somewhere NPS.</p>
+<p>Source: Multi County Code, Ch. 5. Verify against the county.</p></body></html>"""
+
+NO_DATE = """<html><body><div>✅ Allowed</div>
+<h2>The rules</h2><p>Detecting is allowed on the public beach.</p><div>Permit: Not required</div>
+<p>Source: County Code, Ch. 20.</p></body></html>"""
+
 NO_SOURCE = """<html><body><div>✅ Allowed Last verified: 2026-09-15</div>
-<h2>The rules</h2><p>It is allowed here.</p><div>Permit: Not required</div></body></html>"""
+<h2>The rules</h2><p>Detecting is allowed on the public beach.</p><div>Permit: Not required</div></body></html>"""
+
+LAW_PAGE = """<html><body>
+<h1>Florida Metal Detecting Laws</h1>
+<p>Florida state parks generally prohibit metal detecting except in designated swim
+areas. County and city rules vary. Always confirm with the managing authority.</p>
+<h2>State parks</h2><p>Detecting requires a permit in many parks.</p>
+<p>Federal land is governed by ARPA.</p></body></html>"""
 
 
-def _fixture_fetch(html):
+def _ok_fetch(html):
     return lambda url, timeout=30.0: {"ok": True, "html": html,
                                       "sha256": hashlib.sha256(html.encode()).hexdigest(),
                                       "bytes": len(html.encode())}
+
+
+def _fail_fetch(url, timeout=30.0):
+    return {"ok": False, "error": "URLError: unreachable (timed out)"}
 
 
 def main() -> int:
@@ -60,88 +86,105 @@ def main() -> int:
     CHAIN.unlink(missing_ok=True)
     chain = ReceiptChain(CHAIN)
     checks = {}
-
-    # 1 + 2. Deterministic extraction + verbatim.
-    ex = vs.extract(FIXTURE)
-    text = vs._text(FIXTURE)
-    checks["1. extraction reads verdict/quote/source/date from a templated page"] = (
-        ex["ok"] and ex["verdict"] == "Allowed" and ex["verified_date"] == "2026-09-15"
-        and "Testville Beach Code" in ex["quote"] and "Testville County Code" in ex["source"])
-    checks["2. the reported quote + source are verbatim in the page"] = (
-        ex["ok"] and ex["quote"] in text and ex["source"] in text)
-    checks["1. a page with no recognizable structure fails closed"] = (not vs.extract(GARBAGE)["ok"])
-    checks["1. a page missing the source fails closed (no partial promote)"] = (not vs.extract(NO_SOURCE)["ok"])
-
-    place = "Testville Beach"
-    store = KnowledgeStore()
-
-    # 3. Before approval: staged, not answered.
-    o0 = detect.answer(chain, place, store=store)["outcome"]
-    checks["3. before verifying, the place is STAGED (not answered)"] = (o0["decision"] == detect.STAGED)
-
-    # Propose (fetch + extract) against the fixture — staged for approval.
     saved = vs.fetch
-    vs.fetch = _fixture_fetch(FIXTURE)
+
+    # ---- extraction across page shapes (hermetic, no network) ----
+    a = vs.extract(STANDARD)
+    ta = vs._text(STANDARD)
+    checks["a. standard page: verdict + verbatim quote + named source + date"] = (
+        a["ok"] and a["verdict"] == "Allowed" and a["verified_date"] == "2026-09-15"
+        and a["quote"] in ta and a["source"] in ta and "Testville Beach Code" in a["quote"])
+
+    b = vs.extract(MULTI_VERDICT)
+    checks["b. multiple verdict words: the one at 'Last verified' wins (Allowed)"] = (
+        b["ok"] and b["verdict"] == "Allowed")
+
+    c = vs.extract(NO_DATE)
+    checks["c. missing 'Last verified': fails closed, names the missing field"] = (
+        (not c["ok"]) and "last-verified date" in c["error"])
+
+    d = vs.extract(NO_SOURCE)
+    checks["d. missing named source: fails closed"] = (
+        (not d["ok"]) and "named source" in d["error"])
+
+    e = vs.extract(LAW_PAGE)
+    checks["e. a law/guide page (not a location): fails closed"] = (not e["ok"])
+
+    # ---- f. fetch failure stages, never promotes ----
+    store_f = KnowledgeStore()
+    vs.fetch = _fail_fetch
     try:
-        prop = store.propose(chain, place, "https://example.test/testville")
+        rf = store_f.propose(chain, "Daytona Beach", INDEX_URL)
     finally:
         vs.fetch = saved
-    checks["3. verify fetch+extract are staged, not an answer yet"] = (
-        prop["ok"] and store.get(place) is None)
-    o_mid = detect.answer(chain, place, store=store)["outcome"]
-    checks["3. a pending (un-approved) proposal does NOT answer"] = (o_mid["decision"] == detect.STAGED)
+    fetch_rcpt = [r["action"] for r in chain.receipts()
+                  if r["action"]["type"] == "verify_fetch" and r["action"].get("place") == "Daytona Beach"]
+    checks["f. fetch failure: staged with the fetch error, never promoted"] = (
+        (not rf["ok"]) and store_f.get("Daytona Beach") is None
+        and bool(fetch_rcpt) and fetch_rcpt[-1]["fetched_ok"] is False and fetch_rcpt[-1].get("reason"))
 
-    # 4. Approve -> confirmed secondary answer.
-    conf = store.confirm(chain, place)
-    o1 = detect.answer(chain, place, store=store)["outcome"]
-    cit = o1.get("citation") or {}
-    checks["4. after approval it answers as a confirmed secondary"] = (
-        conf["ok"] and o1["decision"] == detect.ANSWERED_WITH_CAVEAT
-        and o1["evidence_tier"] == vs.CONFIRMED_SECONDARY)
-    checks["4. the answer names a primary, cites the page URL + verbatim quote"] = (
-        cit.get("url", "").startswith("http") and cit.get("quote", "") in text
-        and "secondary" in (cit.get("source", "") + (o1.get("caveat") or "")).lower())
-    checks["4. it is labeled not-the-ordinance, confirm-the-primary (not Tier 1)"] = (
-        "primary" in (o1.get("caveat") or "").lower()
-        and o1["evidence_tier"] != "primary")
+    # ---- g. out-of-index URL refused WITHOUT a fetch ----
+    called = {"fetch": False}
 
-    # 5. A failed extraction never promotes.
-    store2 = KnowledgeStore()
-    vs.fetch = _fixture_fetch(GARBAGE)
+    def _tripwire(url, timeout=30.0):
+        called["fetch"] = True
+        return {"ok": True, "html": STANDARD, "sha256": "x", "bytes": 1}
+
+    store_g = KnowledgeStore()
+    vs.fetch = _tripwire
     try:
-        bad = store2.propose(chain, "Nowhere Beach", "https://example.test/nowhere")
+        rg = store_g.propose(chain, "Evil Place", "https://evil.example/x")
     finally:
         vs.fetch = saved
-    checks["5. a failed extraction stays staged, never promoted"] = (
-        (not bad["ok"]) and store2.get("Nowhere Beach") is None)
+    g_rcpt = [r["action"] for r in chain.receipts()
+              if r["action"]["type"] == "verify_fetch" and r["action"].get("place") == "Evil Place"]
+    checks["g. out-of-index URL refused WITHOUT a fetch (URL not in site index)"] = (
+        (not rg["ok"]) and ("not in site index" in rg["error"])
+        and (called["fetch"] is False)
+        and bool(g_rcpt) and g_rcpt[-1]["reason"] == "URL not in site index")
 
-    # 6. Receipts + chain.
-    types = [r["action"]["type"] for r in chain.receipts()]
-    checks["6. fetch / extract / promote are each receipted"] = all(
-        t in types for t in ("verify_fetch", "verify_extract", "verify_promote"))
-    ex_rcpt = next(r["action"] for r in chain.receipts() if r["action"]["type"] == "verify_extract")
-    checks["6. the extract receipt is staged-for-approval, not executed"] = (
-        ex_rcpt.get("staged_for_approval") is True and ex_rcpt.get("executed") is False
-        and ex_rcpt.get("verbatim_in_page") is True)
+    # ---- h. confirmed-secondary caveat in BOTH the reply and the receipt ----
+    store_h = KnowledgeStore()
+    vs.fetch = _ok_fetch(STANDARD)
+    try:
+        store_h.propose(chain, "Testville Beach", INDEX_URL)
+    finally:
+        vs.fetch = saved
+    before = detect.answer(chain, "Testville Beach", store=store_h)["outcome"]
+    store_h.confirm(chain, "Testville Beach")
+    after = detect.answer(chain, "Testville Beach", store=store_h)
+    o = after["outcome"]
+    reply = voice._detect_reply(o)
+    rcpt = after["answer_receipt"]["action"]
+    caveat = (o.get("caveat") or "").lower()
+    needed = ("read the site", "ordinance", "approved", "confirm the primary")
+    checks["h. before approval the place is STAGED (not answered)"] = (before["decision"] == detect.STAGED)
+    checks["h. after approval: confirmed secondary (answered_with_caveat)"] = (
+        o["decision"] == detect.ANSWERED_WITH_CAVEAT and o["evidence_tier"] == vs.CONFIRMED_SECONDARY)
+    checks["h. caveat present in the reply (not a bare 'allowed')"] = all(w in reply.lower() for w in needed)
+    checks["h. caveat present in the receipt, never Tier 1"] = (
+        all(w in (rcpt.get("caveat") or "").lower() for w in needed)
+        and rcpt.get("evidence_tier") == vs.CONFIRMED_SECONDARY and rcpt.get("evidence_tier") != "primary")
+
+    # ---- receipts + chain ----
     ok, reason = verify_chain(CHAIN)
-    checks["6. chain verifies end to end"] = ok
+    checks["chain verifies end to end"] = ok
 
     for label, passed in checks.items():
         print(f"  [{'PASS' if passed else 'FAIL'}] {label}")
 
-    # Bonus: a real fetch of a live page (informational — needs network).
     live = vs.fetch("https://wheretodetect.org/metal-detecting/florida/daytona-beach/")
     if live["ok"]:
         lex = vs.extract(live["html"])
-        print(f"\n  live check: Daytona Beach -> extract ok={lex['ok']} "
-              f"verdict={lex.get('verdict')} (quote verbatim={lex.get('quote','') in vs._text(live['html'])})")
+        print(f"\n  live check: Daytona Beach -> extract ok={lex['ok']} verdict={lex.get('verdict')} "
+              f"(quote verbatim={lex.get('quote', '') in vs._text(live['html'])})")
     else:
         print(f"\n  live check skipped (no network): {live['error']}")
 
     if all(checks.values()):
-        print("\nVERIFY-ON-DEMAND ACCEPTANCE: PASS")
+        print("\nVERIFY-ON-DEMAND (HARDENED) ACCEPTANCE: PASS")
         return 0
-    print("\nVERIFY-ON-DEMAND ACCEPTANCE: FAIL")
+    print("\nVERIFY-ON-DEMAND (HARDENED) ACCEPTANCE: FAIL")
     return 1
 
 

@@ -42,6 +42,13 @@ def meta() -> dict:
             "url_count": d.get("url_count"), "entry_count": len(d.get("entries", []))}
 
 
+def index_urls() -> frozenset:
+    """The exact set of page URLs in the index. Verify-on-demand will only ever
+    fetch a URL that is in here — the one bit of web Andy touches is the index it
+    already holds; anything else is refused without a fetch."""
+    return frozenset(e.get("url", "") for e in _load().get("entries", []))
+
+
 def candidates(place: str, state: str | None = None, limit: int = 3) -> list[dict]:
     """Up to `limit` candidate site pages whose label matches `place` (normalized),
     optionally filtered to a state. Each is INDEX DATA ONLY — url, label, and a

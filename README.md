@@ -16,8 +16,9 @@ verification fails. Miss a visual confirmation and the checklist refuses to
 tick. The agent's claim is never "trust me"; it is "here is the chain —
 recompute it."
 
-Built solo for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4,
-2026) · **Indie Developer** track · theme: **Build for Your World**.
+Built solo by Tony Jagodka, with AI assistance as described below, for the
+**Meta Global AI Developer Hackathon** (Oct 26 – Nov 4, 2026) · **Indie
+Developer** track · theme: **Build for Your World**.
 
 ## Architecture
 
@@ -35,6 +36,33 @@ Built solo for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4,
 The loop is perceive → propose → **check** → act → **receipt**, in that order,
 every turn. There is no code path to a tool that skips the checker, and no
 action that doesn't leave a receipt.
+
+## How this was built
+
+Three roles, stated plainly — "solo" means one human entrant, not no AI help:
+
+- **Tony Jagodka, Director.** Solo human entrant and submitter. Owns every
+  decision, every approval, the demo voice, and the submit button. Nothing in the
+  repo was pushed without his separate approval per push.
+- **Cosmo (Muse), Build Manager.** Schedule and information flow, prompts and work
+  orders for the builder, verification of every claimed push against GitHub before
+  calling it public, and the honest-read checks on claims before they enter the
+  demo or README.
+- **Claude (Claude Code), Builder.** Wrote the code in this repo, in sessions
+  directed by Tony's prompts and Cosmo's work orders, with acceptance tests for
+  each beat.
+
+None of these AI assistants is a human team member; the human team is Tony alone.
+
+The product itself also uses AI models — named exactly as the Architecture table
+above: **Muse Spark** as the brain, **SAM 3.1** as the eyes, **Muse Voice
+Transcribe** as voice-in, and **ElevenLabs** as voice-out (declared non-Meta and
+non-local). Building assistance and product models are two different things, and
+both are disclosed here.
+
+The code in this repository was written during the hackathon window, **Oct 26 –
+Nov 4, 2026**, except where the *Prior inspiration* section below says otherwise.
+No Plummy or aee-e2 code was imported.
 
 ## Try the Day 1 acceptance test
 
@@ -101,7 +129,11 @@ approval the place answers as a **confirmed secondary**: it names a primary, is
 labeled *"I read the site, not the ordinance — confirm the primary,"* and is never
 treated as Tier-1 grade. Every step is a receipt (`verify_fetch` with a hash of
 what was fetched, `verify_extract` with the verbatim quote, `verify_promote` with
-your approval), so the knowledge base grows only by proof you can replay.
+your approval), so the knowledge base grows only by proof you can replay. Earned
+answers live for the **current session only** — they do not persist to a new run.
+Verify-on-demand also fetches only URLs that are already in the site index; any
+other URL is refused without a fetch, so the one bit of web Andy touches is the
+index it already holds.
 
 ## Try the verify-on-demand test
 

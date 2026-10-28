@@ -20,6 +20,8 @@ import re
 import time
 import urllib.request
 
+from . import tier2
+
 CONFIRMED_SECONDARY = "confirmed_secondary"
 
 # The verdict word sits right before the "Last verified" line — anchoring to that
@@ -63,7 +65,8 @@ def extract(html: str) -> dict:
     source = " ".join(sm.group(1).split()).strip() if sm else None
     date = dm.group(1) if dm else None
 
-    missing = [n for n, v in (("verdict", verdict), ("rule quote", quote), ("source", source)) if not v]
+    missing = [n for n, v in (("verdict", verdict), ("rule quote", quote),
+                              ("named source", source), ("last-verified date", date)) if not v]
     if missing:
         return {"ok": False, "error": "page structure not recognized; missing " + ", ".join(missing)}
     # VERBATIM guard: the quote and the source must actually appear in the page.
@@ -119,6 +122,16 @@ class KnowledgeStore:
             place, url = self.last_candidate
         if not (place and url):
             return {"ok": False, "error": "no candidate to verify yet — ask about a place first"}
+
+        # Fetch restriction: Andy only ever fetches a URL that is already in the site
+        # index it holds. Anything else — from any path — is refused WITHOUT a fetch.
+        if url not in tier2.index_urls():
+            chain.append({"type": "verify_fetch",
+                          "summary": f"refused to fetch an out-of-index URL for {place}",
+                          "place": place, "url": url, "fetched_ok": False,
+                          "page_sha256": None, "bytes": None,
+                          "reason": "URL not in site index"})
+            return {"ok": False, "error": "URL not in site index — Andy only fetches pages in its site index"}
 
         f = fetch(url)
         chain.append({"type": "verify_fetch",
