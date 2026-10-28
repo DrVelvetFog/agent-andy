@@ -45,6 +45,56 @@ SPEAK_WHEN = {
 # One dismissal silences unprompted comments for the rest of the session.
 DISMISSAL_SCOPE = "session"
 
-# Demo memory is SEEDED, not learned: owner-approved facts only, stated
-# honestly as seeded. Filled in by the owner before the demo; nothing invented.
-SEEDED_FACTS: list[str] = []
+# ---- Seeded memory: CITATION ONLY, never a gate ----
+#
+# Standing policy in the owner's own words, CITED when the deterministic checker
+# already blocks or stages a request — so a refusal reads "because the owner said
+# so, and here is the receipt," not as a model opinion. A seeded line never allows,
+# blocks, or stages anything: policy.toml is canonical and WINS every conflict.
+#
+# The ACTIVE list stays EMPTY until the owner approves lines one by one (the drafts
+# live in docs/seeded-memory-draft.md, which Andy never loads). Each active line is
+# {category, text, source, asserts}: `category` maps (below, explicitly) to the
+# checker rule-ids it may be cited for; `asserts` is "refuse" for a real standing
+# refusal, and a line that "allow"s something policy blocks is reported as a
+# conflict and NOT cited.
+SEEDED_FACTS: list[dict] = []
+
+# The ONLY mapping from a seeded category to the checker rule-ids it may cite for —
+# explicit, in code, never inferred. A line is cited only on a block/stage whose
+# rule is in its category's set.
+CITE_CATEGORIES: dict[str, set] = {
+    "no-exfiltration": {"exfiltration"},
+    "no-unapproved-financial": {"financial"},
+    "no-destructive-without-approval": {"destructive"},
+    "no-secret-fields": {"secret-fields"},
+    "stay-on-task": {"off-task"},
+    "no-system-commands": {"system-command"},
+    "no-comment-on-people": {"about-people"},
+}
+
+
+def cite_for(verdict: dict, seeded: list | None = None) -> dict:
+    """Deterministic citation lookup for a checker verdict. Returns
+    {cited, source, conflict}. A seeded line is cited ONLY when the verdict is a
+    block/stage, its category maps to the verdict's rule, and it ASSERTS a refusal.
+    A line that would allow what policy blocks/stages is a CONFLICT: policy.toml
+    wins, the line is NOT cited, and the conflict is reported. No match -> nothing
+    cited, and the reply is exactly as it was without seeded memory."""
+    out = {"cited": None, "source": None, "conflict": None}
+    tier = (verdict or {}).get("verdict")
+    rule = (verdict or {}).get("rule")
+    if tier not in ("block", "stage"):
+        return out
+    for line in (SEEDED_FACTS if seeded is None else seeded):
+        if not isinstance(line, dict):
+            continue
+        if rule in CITE_CATEGORIES.get(line.get("category"), set()):
+            if line.get("asserts", "refuse") == "refuse":
+                out["cited"] = line.get("text")
+                out["source"] = line.get("source")
+            else:  # the line would allow what policy blocks/stages — policy wins
+                out["conflict"] = (f"a standing-policy note would allow this, but policy.toml "
+                                   f"rule '{rule}' {tier}s it — policy wins, note not cited")
+            return out
+    return out

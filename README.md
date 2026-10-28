@@ -246,6 +246,23 @@ checks the safety properties: each blocks/stages (or is not-shipped), no tool ru
 work on the live chain, and a repeat does not weaken the verdict. Local only — no
 API key, no network — which is why a full demo run costs nothing.
 
+## Seeded memory — citable refusals (mechanism only, not yet active)
+
+Refusals are governed by `policy.toml`, and always will be. Seeded memory is a thin
+**citation** layer on top: standing policy in the owner's own words, shown *beside* a
+policy verdict when the checker already blocks or stages a request — so a refusal
+reads "because the owner said so, and here is the receipt," not as a model opinion.
+
+It is **citation only, never a gate.** A seeded line never allows, blocks, or stages
+anything; the match is a deterministic category→rule mapping in code, never model
+inference. **`policy.toml` wins every conflict:** a line that would allow something
+policy blocks is *not* cited, and the conflict is stated in the receipt.
+
+The active list (`agent/policy.py` `SEEDED_FACTS`) is **empty**, and stays empty until
+the owner approves lines **one by one**. The proposed lines live in
+`docs/seeded-memory-draft.md` (headed DRAFT · NOT ACTIVE · NOT LOADED) — Andy never
+loads that file, and **no line is live**. `scripts/seeded_acceptance.py`.
+
 ## Try the daemon test
 
 ```bash
@@ -398,6 +415,14 @@ so it runs offline.
   stages, or is not-shipped; the off-task rule was strengthened to catch "ignore
   your rules" / "pretend you are not gated" (a gate fix, verified against the legit
   controls). A full run costs $0 and runs locally. `scripts/attackable_acceptance.py`.
+- **Oct 28 (seeded memory — citable refusals):** a thin citation layer so a refusal
+  can read "because the owner said so." When the checker blocks/stages, the chat reply
+  may cite a standing-policy line in the owner's words — but only by a deterministic
+  category→rule mapping (`agent/policy.py` `cite_for`), never model inference, and
+  never changing the verdict; `policy.toml` wins every conflict. The active
+  `SEEDED_FACTS` is empty and stays empty until the owner approves lines one by one;
+  drafts live in `docs/seeded-memory-draft.md`, which Andy never loads.
+  `scripts/seeded_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

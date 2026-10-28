@@ -30,7 +30,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from . import checker, detect, loop, tier2, tts, witness
+from . import checker, detect, loop, policy, tier2, tts, witness
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
@@ -347,11 +347,21 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     else:
         action = {"type": "tool", "tool": "chat_request", "summary": message}
         verdict = checker.evaluate(action)
-        chain.append({**action, "verdict": verdict, "executed": False})
+        cite = policy.cite_for(verdict)   # citation only — never changes the verdict
+        receipt = chain.append({**action, "verdict": verdict, "executed": False,
+                                "cited_policy": cite["cited"], "cited_source": cite["source"],
+                                "policy_conflict": cite["conflict"]})
         if verdict["verdict"] != checker.ALLOW:
             reply_text = (f"I won't do that — {verdict['reason']} "
                           f"({verdict['verdict']}, rule: {verdict['rule']}).")
-            payload = {"intent": "general", "verdict": verdict, "executed": False}
+            # Order: policy reason (above), then the standing-policy line, then the
+            # receipt reference — shown only when a seeded line actually matches.
+            if cite["cited"]:
+                reply_text += (f" Your standing policy: “{cite['cited']}” "
+                               f"({cite['source']}). Receipt {receipt['hash'][:12]}…")
+            elif cite["conflict"]:
+                reply_text += f" (Note: {cite['conflict']}.)"
+            payload = {"intent": "general", "verdict": verdict, "executed": False, "cite": cite}
         elif run_general:
             try:
                 outcomes = loop.run_turn(chain, message)   # allowed -> the gated Spark loop

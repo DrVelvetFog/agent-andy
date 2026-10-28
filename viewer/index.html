@@ -251,7 +251,12 @@ function classify(a) {
     return { tier: 'daemon', label: 'DAEMON', reason: 'gated: ' + gv + ' · NOT executed · dismissible' };
   }
   const v = a.verdict && a.verdict.verdict;
-  if (v) return { tier: v, label: v.toUpperCase(), reason: (a.verdict.reason || '') + (a.verdict.rule ? '  ·  rule: ' + a.verdict.rule : '') };
+  if (v) {
+    let reason = (a.verdict.reason || '') + (a.verdict.rule ? '  ·  rule: ' + a.verdict.rule : '');
+    if (a.cited_policy) reason += '  ·  standing policy: “' + a.cited_policy + '”';
+    else if (a.policy_conflict) reason += '  ·  ' + a.policy_conflict;
+    return { tier: v, label: v.toUpperCase(), reason: reason };
+  }
   if (t === 'detect_answer') {
     const d = (a.decision || '').toUpperCase();
     if (d.indexOf('STAGED') >= 0) {
