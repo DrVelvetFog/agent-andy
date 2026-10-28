@@ -115,6 +115,13 @@ def evaluate_query(place: str, strict: bool = False) -> dict:
 
     if tier == "primary":
         out["decision"] = ANSWERED
+    elif tier == "corroborated":
+        # An enacted citation corroborated by more than one readable source but not
+        # yet confirmed by a direct read of the primary. It ANSWERS with its caveat in
+        # BOTH normal and strict mode — the caveat, not a stage, carries the limitation.
+        # Strict mode only tightens; it never loosens, so a corroborated citation that
+        # answers in normal mode must answer in strict mode too.
+        out["decision"] = ANSWERED_WITH_CAVEAT
     elif tier == "primary_draft":
         if strict:
             out["decision"] = STAGED

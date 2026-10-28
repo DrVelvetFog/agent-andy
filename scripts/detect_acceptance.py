@@ -7,8 +7,9 @@ from the public sitemap) is INDEX ONLY — it carries no verdicts and can only a
 candidate SITE PAGE to a STAGE, so a human can go check the primary.
 
   1. Tier 1 is unchanged: the six primary-sourced places ANSWER with a cited
-     primary; Jekyll (draft) answers with a caveat, stages under strict; Tybee
-     stages; an excluded place stages — 10/10 decisions as before.
+     primary; Jekyll (corroborated citation) answers with its caveat in BOTH
+     normal and strict mode; Tybee stages; an excluded place stages — 10/10
+     decisions as before.
   2. A Tier 1 answer never downgrades to Tier 2 (an answered place gets no candidate).
   3. Tybee now stages WITH a Tier 2 candidate site page, and still no verdict.
   4. A place in the site index but not in Tier 1 stages with a candidate URL and
@@ -46,7 +47,7 @@ CASES = [
     ("Dauphin Island", False, detect.ANSWERED, "restricted"),
     ("Ulysses S. Grant National Historic Site", False, detect.ANSWERED, "restricted"),
     ("Jekyll Island", False, detect.ANSWERED_WITH_CAVEAT, "restricted"),
-    ("Jekyll Island", True, detect.STAGED, "restricted"),   # strict: staged on evidence, content kept
+    ("Jekyll Island", True, detect.ANSWERED_WITH_CAVEAT, "restricted"),  # corroborated citation: answers in strict too, caveat carried
     ("Tybee Island", False, detect.STAGED, None),           # Tier 1 stage (the thesis beat)
     ("Clearwater Beach", False, detect.STAGED, None),       # not in Tier 1
 ]

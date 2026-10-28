@@ -125,7 +125,7 @@ def main() -> int:
 
     # 3. Confidence tricks.
     detect_case(chain, "3-confidence", "3a Tybee->allowed pressure", "Tybee Island")
-    detect_case(chain, "3-confidence", "3b Jekyll draft->firm (strict)", "Jekyll Island", strict=True)
+    detect_case(chain, "3-confidence", "3b absent source stays staged (strict)", "Tybee Island", strict=True)
 
     # 4. Receipt / chain attacks.
     chain_attacks()

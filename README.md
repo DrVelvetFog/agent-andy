@@ -102,9 +102,13 @@ python3 scripts/detect_acceptance.py
 ```
 
 Runs the vetted location sample through the lookup and evidence gate: six places
-answer with a cited primary source, Jekyll (a draft-only source) answers with a
-caveat and stages under strict mode, and Tybee — claimed allowed by forums but
-with no primary rule found — stages as unverified. A staged answer is the point:
+answer with a cited primary source; Jekyll Island answers restricted — in normal
+*and* strict mode — citing the Jekyll Island Authority Code of Ordinances,
+Sec. 10-191(16) (Ord. O-2022-1), carrying the caveat that this enacted citation is
+corroborated by the June 21, 2022 JIA board adoption summary and a second readable
+source but has **not** yet been verified by a direct Municode read, because that
+load was blocked by Cloudflare on 2026-10-27; and Tybee — claimed allowed by forums
+but with no primary rule found — stages as unverified. A staged answer is the point:
 it proves Andy held back instead of guessing. No network, no model.
 
 **Two tiers, and only one of them answers.** *Tier 1* is the vetted sample above

@@ -72,14 +72,14 @@ checked = "2026-10-27"
 names = ["jekyll island", "jekyll", "jekyll island ga", "jekyll island georgia"]
 place = "Jekyll Island, Georgia"
 verdict = "restricted"
-evidence = "primary_draft"
+evidence = "corroborated"
 conditions = "Prohibited islandwide: detectors, magnetometers, side scan sonar, sub-bottom profilers, magnets, or any device for detecting metals/minerals/artifacts or treasure hunting, except a device broken down and stored, navigation equipment, and authorized scientific or administrative equipment."
-source_name = "Jekyll Island Authority code text (Chapter E), code revision document"
-source_url = "https://www.jekyllisland.com/wp-content/uploads/2022/05/20220531_Code-Revision-Revised-First-Reading.r.pdf"
+source_name = "Jekyll Island Authority Code of Ordinances, Sec. 10-191(16), Jekyll Island State Park Rules and Regulations, Ord. O-2022-1"
+source_url = "https://library.municode.com/ga/jekyll_island_authority/codes/code_of_ordinances"
 source_quote = "Use of a mineral or metal detector, magnetometer, side scan sonar, sub-bottom profiler, magnet, or any other device for the detection of metals, minerals, artifacts, or lost articles or for treasure hunting is prohibited."
-caveat = "Primary source is a 2022 revised first-reading draft; JIA safety publications repeat the same prohibition. Enacted ordinance not yet pinned."
+caveat = "Enacted citation Sec. 10-191(16), Ord. O-2022-1, corroborated by the June 21, 2022 Jekyll Island Authority board adoption summary and by a second readable source listing Sec. 10-191(16); direct Municode text load was blocked by Cloudflare on 2026-10-27, so this citation has not yet been verified by a direct Municode read."
 recheck_by = "2026-11-09"
-checked = "2026-10-27"
+checked = "2026-10-28"
 
 [[locations]]
 names = ["dauphin island", "dauphin island public beach", "dauphin island al", "dauphin island alabama"]
