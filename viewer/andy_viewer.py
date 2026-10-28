@@ -70,16 +70,18 @@ def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True, persist_p
                  "store": KnowledgeStore(persist_path=persist_path)})
 
 
-def chat_message(message: str, voice_mode="auto", run_general: bool = True) -> dict:
+def chat_message(message: str, voice_mode="auto", run_general: bool = True,
+                 demo: bool = False) -> dict:
     """Run one typed message through the real gate and return the reply, the live
-    chain, and the verifier's verdict — exactly what the page renders."""
+    chain, and the verifier's verdict — exactly what the page renders. `demo` is the
+    "Try to break it" mode: same checker and receipts, no model spend."""
     if CHAT["chain"] is None:
         init_chat()
     if not message or not message.strip():
         return {"error": "empty message"}
     chain = CHAT["chain"]
     res = voice.chat_turn(chain, message, daemon=CHAT["daemon"], store=CHAT["store"],
-                          voice=voice_mode, run_general=run_general)
+                          voice=voice_mode, run_general=run_general, demo=demo)
     reply = res["reply"]
     d = res.get("daemon")
     daemon_out = ({"text": d["text"], "about": d.get("about"),
@@ -255,7 +257,8 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/chat":
             self._json(chat_message(str(body.get("message", "")),
                                     body.get("voice", "auto"),
-                                    bool(body.get("run_general", True))))
+                                    bool(body.get("run_general", True)),
+                                    bool(body.get("demo", False))))
         elif u.path == "/api/daemon-dismiss":
             self._json(daemon_dismiss())
         else:

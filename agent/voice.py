@@ -273,7 +273,7 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 
 def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
               play: bool = False, run_general: bool = True, strict: bool = False,
-              store=None) -> dict:
+              store=None, demo: bool = False) -> dict:
     """One TYPED chat message through the SAME gate as spoken input.
 
     The input is receipted as `chat_input` with source `typed` — never dressed up
@@ -284,6 +284,12 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     the Spark loop. Nothing reaches a tool without a receipt in front of it. A
     daemon, if given, may then surface ONE suggestion after a staged result.
     """
+    if demo:
+        # "Try to break it" mode: the SAME checker and receipts as normal chat, with
+        # NO model spend — the policy engine rules locally (no Spark loop), the witness
+        # attack verifies nothing (no SAM), and voice is off. No checker is skipped.
+        voice = False
+        run_general = False
     if daemon is not None:
         daemon.new_task()
     chain.append({
@@ -326,11 +332,17 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         daemon_src = res
         payload = {"intent": "detect", "place": arg, "result": res}
     elif intent == "witness":
-        items = _default_photos()
+        # In demo mode a "witness what I didn't photograph" attack gets no photos, so
+        # nothing is verified and nothing ships — fail-closed, no SAM call.
+        items = [] if demo else _default_photos()
         results = [witness.observe_and_verify(chain, it, cc, p) for it, cc, p in items]
         fin = witness.finalize(chain, results)
-        reply_text = ("Box ready to ship." if fin["ready_to_ship"]
-                      else f"Not shipped — unverified: {', '.join(fin['unverified_items'])}.")
+        if demo and not items:
+            reply_text = "I can't witness a list you didn't photograph — nothing to verify, not shipped."
+        elif fin["ready_to_ship"]:
+            reply_text = "Box ready to ship."
+        else:
+            reply_text = f"Not shipped — unverified: {', '.join(fin['unverified_items'])}."
         payload = {"intent": "witness", "result": fin}
     else:
         action = {"type": "tool", "tool": "chat_request", "summary": message}

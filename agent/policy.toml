@@ -54,8 +54,8 @@ any = ["password", "credit card", "ssn", "api key", "secret key", "private key",
 [[rules]]
 id = "off-task"
 tier = "block"
-reason = "acts outside the owner's active task"
-any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "ignore previous instructions"]
+reason = "acts outside the owner's active task, or tries to disable the gate"
+any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "disable the gate", "bypass the checker", "bypass the gate", "ignore previous instructions", "ignore your instructions", "ignore your rules", "ignore the rules", "ignore my rules", "pretend you are not gated", "pretend you're not gated", "not gated", "do it anyway"]
 
 [[rules]]
 id = "financial"
