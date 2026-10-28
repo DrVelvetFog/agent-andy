@@ -178,11 +178,15 @@ def _detect_reply(o: dict) -> str:
 
 
 def handle(chain, transcript: str, source: str, photos=None, strict: bool = False,
-           voice: str | bool = "auto") -> dict:
+           voice: str | bool = "auto", daemon=None) -> dict:
     """Route one transcript (live or injected) through the gated paths. The
     transcript's source is receipted so a reader can tell a real transcription
     from an injected one. `voice` is passed to speak() — pass voice=False in
-    offline tests so routing/gating runs without calling the TTS API."""
+    offline tests so routing/gating runs without calling the TTS API. `daemon`,
+    when given, is a Daemon that may surface ONE suggestion after a task that
+    staged something; it is None by default, so without one the loop is unchanged."""
+    if daemon is not None:
+        daemon.new_task()
     chain.append({
         "type": "voice_input",
         "summary": f"heard ({source}): {transcript[:80]}",
@@ -194,8 +198,12 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     intent, arg = route(transcript)
     if intent == "detect":
         res = detect.answer(chain, arg, strict=strict)
-        return {"intent": "detect", "source": source, "place": arg,
-                "result": res, "reply": speak(_detect_reply(res["outcome"]), chain, voice=voice)}
+        reply = speak(_detect_reply(res["outcome"]), chain, voice=voice)
+        result = {"intent": "detect", "source": source, "place": arg,
+                  "result": res, "reply": reply}
+        if daemon is not None:   # one staged-receipt suggestion, at most, this task
+            result["daemon"] = daemon.observe(chain, res, voice_mode=voice)
+        return result
     if intent == "witness":
         items = photos or _default_photos()
         results = [witness.observe_and_verify(chain, it, cc, p) for it, cc, p in items]

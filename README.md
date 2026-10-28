@@ -28,6 +28,8 @@ Built solo for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4,
 | Rule check | answers "can I detect here?" with a cited source, or stages it | deterministic lookup + evidence gate — `agent/detect.py` |
 | Eyes | verified observation for Witness receipts | SAM 3.1 (`sam-3.1`, Meta Model API) |
 | Voice in | speech to text | Muse Voice Transcribe |
+| Voice out | spoken reply, declared non-Meta and non-local | ElevenLabs (`eleven_v4`) via stdlib — `agent/tts.py` |
+| Daemon | one proactive, dismissible suggestion after a task stages something | gated + receipted, never executes — `agent/daemon.py` |
 | Receipts | hash-chained, fail-closed action log | stdlib, no model — `receipts/` |
 
 The loop is perceive → propose → **check** → act → **receipt**, in that order,
@@ -115,6 +117,21 @@ never touched — and verification fails, by receipt number. Stdlib only, binds 
 `127.0.0.1` only; nothing leaves the laptop. (No chains yet? Generate one with no
 API key: `python3 scripts/day1_acceptance.py`.)
 
+## Try the daemon test
+
+```bash
+python3 scripts/daemon_acceptance.py
+```
+
+The daemon is Andy's one proactive surface: after a task *stages* something (a
+place it could not verify), it may offer exactly one dismissible suggestion —
+hold that item for a human — and nothing else. The test proves the rules it is
+held to: silent outside an active task; at most once per task, on the staged
+trigger only; one dismissal silences the whole session (and the dismissal is
+itself a receipt); never a word about people, text fields, or off-task content;
+and a suggestion is gated by the policy engine and receipted, but **never
+executed** — acting on it is the human's move. No network, no model.
+
 ## Build log — what was built Oct 26 – Nov 4
 
 - **Oct 26 (kickoff day):** repo created; receipt chain (`receipts/chain.py`),
@@ -181,6 +198,15 @@ API key: `python3 scripts/day1_acceptance.py`.)
   of the audio (`rendered: "external"`), so the one non-local, non-Meta part of the
   loop declares itself in the chain. Missing key or failed call → text fallback,
   never a faked voice. Key read from `ELEVENLABS_API_KEY` (`.env.local`, gitignored).
+- **Oct 28 (daemon):** `agent/daemon.py` adds Andy's one proactive beat — after a
+  task stages something, it surfaces exactly one dismissible suggestion (hold the
+  staged item for review) through the existing `speak()` seam. It honors the
+  declared speaking policy (`policy.py: SPEAK_WHEN`, `DISMISSAL_SCOPE`): silent
+  outside an active task, once per task on the staged trigger only, never about
+  people / text fields / off-task, one dismissal silences the session (receipted).
+  The suggestion is gated by the policy engine and receipted with its verdict, but
+  **never executed** — it is a surface on the loop, not a second actor. Off by
+  default (the loop is unchanged without one). `scripts/daemon_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 
