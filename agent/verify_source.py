@@ -16,13 +16,30 @@ quote), and verify_promote (the owner's approval).
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
 import time
 import urllib.request
+from pathlib import Path
 
 from . import tier2
 
 CONFIRMED_SECONDARY = "confirmed_secondary"
+
+# Earned answers persist HERE — a separate, labeled file, never merged into Tier 1
+# (data/detect_sample.toml). Tracked in the repo (not runs/, which is gitignored),
+# so an owner-approved answer survives a new session. Secondary answers only, below
+# Tier 1, never a primary citation.
+PERSIST_FILE = Path(__file__).resolve().parent.parent / "data" / "confirmed_secondary.json"
+
+# Every field an entry MUST carry to be written or loaded as an answer.
+_REQUIRED = ("place", "url", "page_sha256", "verdict", "quote", "source",
+             "verified_date", "approval_date", "approved_by", "caveat", "verify_promote_ref")
+
+_PERSIST_NOTE = ("Secondary answers only. Andy read the SITE PAGE, not the ordinance. Each was "
+                 "owner-approved on its approval_date. None of these is Tier 1 grade or a primary "
+                 "citation. Delete an entry to revoke that answer — the place then stages again.")
 
 # The verdict word sits right before the "Last verified" line — anchoring to that
 # gets THIS page's verdict, not a "more spots nearby" one, with no emoji dependency.
@@ -87,36 +104,104 @@ def _pending_caveat(source: str) -> str:
             "confirm the primary before relying on it.")
 
 
-def _confirmed_outcome(p: dict) -> dict:
-    """The detect-style outcome a confirmed-secondary place answers with — an answer
-    WITH A CAVEAT: a secondary source that names a primary, owner-approved."""
+def _caveat_full(source: str, approval_date: str) -> str:
+    """The confirmed-secondary caveat, carrying the approval date, shown on the answer."""
+    return (f"Secondary source — Andy read the site page, not the primary ordinance ({source}); "
+            f"you approved this on {approval_date}. Confirm the primary before relying on it.")
+
+
+def _entry_from_proposal(p: dict, approval_date: str, promote_ref: str) -> dict:
+    """The persisted entry for an approved proposal — every required field present."""
     return {
-        "query": p["place"], "matched": True, "place": p["place"],
-        "rule_verdict": p["verdict"].lower(),
+        "place": p["place"], "url": p["url"], "page_sha256": p["page_sha256"],
+        "verdict": p["verdict"], "quote": p["quote"], "source": p["source"],
+        "verified_date": p["verified_date"], "approval_date": approval_date,
+        "approved_by": "owner", "caveat": _caveat_full(p["source"], approval_date),
+        "verify_promote_ref": promote_ref,
+    }
+
+
+def _confirmed_outcome(entry: dict) -> dict:
+    """The detect-style outcome a confirmed-secondary place answers with — an answer
+    WITH A CAVEAT: a secondary source that names a primary, owner-approved, carrying
+    its approval date and page hash for the receipt. Never Tier-1 grade."""
+    return {
+        "query": entry["place"], "matched": True, "place": entry["place"],
+        "rule_verdict": entry["verdict"].lower(),
         "evidence_tier": CONFIRMED_SECONDARY,
         "decision": None,  # detect sets ANSWERED_WITH_CAVEAT
-        "citation": {"source": "wheretodetect.org (secondary, names a primary): " + p["source"],
-                     "url": p["url"], "quote": p["quote"]},
+        "citation": {"source": "wheretodetect.org (secondary, names a primary): " + entry["source"],
+                     "url": entry["url"], "quote": entry["quote"]},
         "conditions": None,
-        "caveat": ("Secondary source — Andy read the site page, not the primary ordinance "
-                   f"({p['source']}); you approved this. Confirm the primary before relying on it."),
+        "caveat": entry["caveat"],
+        "approval_date": entry["approval_date"],
+        "page_sha256": entry["page_sha256"],
+        "verify_promote_ref": entry["verify_promote_ref"],
         "staging_reason": None,
         "tier2_candidates": [], "tier2_reason": None,
     }
 
 
-class KnowledgeStore:
-    """Session memory of places the owner has verified and approved, plus the one
-    step of state the verify/approve commands need. Nothing here is durable: a new
-    session starts empty, and every change is also a receipt on the chain."""
+def _write_persist(path: Path, data: dict) -> None:
+    """Atomic write: a temp file in the SAME directory, then rename — never a partial
+    JSON on crash."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
-    def __init__(self) -> None:
+
+def _load_persist(path: Path):
+    """Load the earned-answers file. Returns (confirmed, invalid_keys, error). Fail
+    closed: a missing file is simply empty; a malformed file, or an entry missing a
+    required field, is NOT answered from — the caller stages with the reason."""
+    if not path.exists():
+        return {}, set(), None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}, set(), "earned answers file unreadable"
+    if not isinstance(data, dict) or not isinstance(data.get("entries"), dict):
+        return {}, set(), "earned answers file unreadable"
+    confirmed, invalid = {}, set()
+    for key, entry in data["entries"].items():
+        if not isinstance(entry, dict) or any(not entry.get(f) for f in _REQUIRED):
+            invalid.add(_norm(key))
+            continue
+        confirmed[_norm(entry["place"])] = _confirmed_outcome(entry)
+    return confirmed, invalid, None
+
+
+class KnowledgeStore:
+    """The owner's verified-and-approved answers, plus the one step of state the
+    verify/approve commands need. Earned answers PERSIST across sessions in a
+    separate file (data/confirmed_secondary.json), loaded on construction; they are
+    secondary answers only, never Tier 1. Every change is also a receipt on the
+    chain, and only approve writes to the file, after its receipt lands."""
+
+    def __init__(self, persist_path=None) -> None:
+        self.persist_path = Path(persist_path) if persist_path else PERSIST_FILE
         self.confirmed: dict = {}        # norm place -> confirmed-secondary outcome
         self.pending: dict = {}          # norm place -> proposal, awaiting the owner's yes
         self.last_candidate = None       # (place, url) from the most recent staged Tier-2 candidate
+        loaded, invalid, err = _load_persist(self.persist_path)
+        self.confirmed.update(loaded)    # earned answers carried over from a previous session
+        self.invalid_places = invalid    # entries present but missing a required field
+        self.persist_error = err         # the whole file is malformed / unreadable
 
     def get(self, place: str):
         return self.confirmed.get(_norm(place))
+
+    def unreadable_reason(self, place: str):
+        """Why a place can't be answered from the earned-answers file, if it can't:
+        the whole file is unreadable, or this place's entry is missing a field. The
+        caller states this when it stages, so a bad file never silently drops to
+        Tier 2 without the reason."""
+        if self.persist_error:
+            return self.persist_error
+        if _norm(place) in self.invalid_places:
+            return "earned answers file unreadable"
+        return None
 
     def note_candidate(self, place: str, url: str) -> None:
         self.last_candidate = (place, url)
@@ -192,16 +277,37 @@ class KnowledgeStore:
 
     def confirm(self, chain, place: str | None = None) -> dict:
         """On the owner's approval, promote a pending proposal to a confirmed
-        secondary answer for the session. Receipted; never auto — approval only."""
+        secondary answer AND persist it. Order is fixed: the verify_promote receipt
+        lands FIRST, then the entry is written atomically, keyed by place so a second
+        approval updates in place and never duplicates. Never auto — approval only."""
         key = _norm(place) if place else (next(iter(self.pending)) if len(self.pending) == 1 else None)
         if key is None or key not in self.pending:
             return {"ok": False, "error": "nothing pending to approve"}
         p = self.pending.pop(key)
-        self.confirmed[key] = _confirmed_outcome(p)
-        chain.append({"type": "verify_promote",
-                      "summary": f"owner approved {p['place']} as a confirmed secondary answer",
-                      "place": p["place"], "url": p["url"], "verdict": p["verdict"],
-                      "source": p["source"], "page_sha256": p["page_sha256"],
-                      "approved_by": "owner",
-                      "approved_on": time.strftime("%Y-%m-%d", time.gmtime())})
+        approval_date = time.strftime("%Y-%m-%d", time.gmtime())
+        receipt = chain.append({"type": "verify_promote",
+                                "summary": f"owner approved {p['place']} as a confirmed secondary answer",
+                                "place": p["place"], "url": p["url"], "verdict": p["verdict"],
+                                "source": p["source"], "page_sha256": p["page_sha256"],
+                                "approved_by": "owner", "approved_on": approval_date})
+        entry = _entry_from_proposal(p, approval_date, receipt["hash"])  # ref = the receipt's hash
+        self.confirmed[key] = _confirmed_outcome(entry)
+        self.invalid_places.discard(key)
+        self._persist_put(key, entry)
         return {"ok": True, "place": p["place"]}
+
+    def _persist_put(self, key: str, entry: dict) -> None:
+        """Write/update ONE entry in the earned-answers file, atomically. Called only
+        from confirm(), after the verify_promote receipt — fetch/extract/decline never
+        write here."""
+        data = {"note": _PERSIST_NOTE, "entries": {}}
+        if self.persist_path.exists():
+            try:
+                cur = json.loads(self.persist_path.read_text(encoding="utf-8"))
+                if isinstance(cur, dict) and isinstance(cur.get("entries"), dict):
+                    data["entries"] = dict(cur["entries"])
+            except Exception:
+                pass  # a previously-bad file is replaced by a clean one on this write
+        data["entries"][key] = entry
+        _write_persist(self.persist_path, data)
+        self.persist_error = None  # the file is good again after a successful write

@@ -63,7 +63,8 @@ def _receipt_types(resp: dict) -> list[str]:
 
 
 def main() -> int:
-    server = andy_viewer.build_server(PORT, chat_chain=CHAIN, reset=True)
+    server = andy_viewer.build_server(PORT, chat_chain=CHAIN, reset=True,
+                                      persist_path=str(ROOT / "runs" / "chat-accept-cs.json"))
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     checks: dict[str, bool] = {}

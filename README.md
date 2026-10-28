@@ -129,11 +129,19 @@ approval the place answers as a **confirmed secondary**: it names a primary, is
 labeled *"I read the site, not the ordinance — confirm the primary,"* and is never
 treated as Tier-1 grade. Every step is a receipt (`verify_fetch` with a hash of
 what was fetched, `verify_extract` with the verbatim quote, `verify_promote` with
-your approval), so the knowledge base grows only by proof you can replay. Earned
-answers live for the **current session only** — they do not persist to a new run.
-Verify-on-demand also fetches only URLs that are already in the site index; any
-other URL is refused without a fetch, so the one bit of web Andy touches is the
-index it already holds. In the chat pane, a pending proposal shows its full
+your approval), so the knowledge base grows only by proof you can replay. Approved
+answers **persist across sessions** in a separate, labeled file
+(`data/confirmed_secondary.json`) — loaded on a new session and answered from the
+file with their approval date, **still below Tier 1** and still labeled *"Andy read
+the site, not the ordinance; confirm the primary."* They are never merged into the
+Tier 1 fixture and never become a primary citation; a persisted answer is not
+re-fetched automatically (say "verify it" again to refresh it). **Delete an entry
+from that file to revoke that answer** — the place then stages again, with its
+Tier 2 candidate. If the file is missing Andy simply has no earned answers; if it
+is malformed, Andy stages the affected place with the reason stated and never
+answers from it. Verify-on-demand also fetches only URLs that are already in the
+site index; any other URL is refused without a fetch, so the one bit of web Andy
+touches is the index it already holds. In the chat pane, a pending proposal shows its full
 evidence (verdict, verbatim quote, source, date, page URL, and the caveat) with
 **Approve** and **Decline** buttons — approving is the same receipted action as
 typing "approve," declining leaves the place staged, and the buttons appear only
@@ -331,9 +339,20 @@ so it runs offline.
   approval (`verify_fetch` + `verify_extract` receipts, nothing acted on); on
   "approve" the place becomes a **confirmed secondary** answer that names a primary
   and is labeled not-the-ordinance (`verify_promote` receipt). Wired through the
-  chat as `verify`/`approve` intents; a `KnowledgeStore` holds the session's earned
-  answers. The knowledge base grows only by replayable proof.
-  `scripts/verify_acceptance.py`.
+  chat as `verify`/`approve` intents; a `KnowledgeStore` holds the earned answers.
+  The knowledge base grows only by replayable proof. `scripts/verify_acceptance.py`.
+- **Oct 28 (Approve/Decline buttons):** the chat pane renders a proposal card with
+  all of a pending proposal's evidence and per-place **Approve**/**Decline**
+  buttons, which POST the same `approve`/`decline <place>` the typed intents use —
+  Decline lands a `verify_decline` receipt and leaves the place staged.
+  `scripts/approve_button_acceptance.py`.
+- **Oct 28 (persist earned answers):** approved answers now survive a new session,
+  written on approve (after the `verify_promote` receipt, atomically) to a separate,
+  labeled file `data/confirmed_secondary.json` — loaded on a new session, answered
+  with their approval date, **still below Tier 1** and never a primary citation. The
+  Tier 1 fixture is never touched; lookup is Tier 1 → persisted secondary → Tier 2;
+  a malformed file fails closed with the reason stated; deleting an entry revokes it.
+  `scripts/persist_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

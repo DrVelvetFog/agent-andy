@@ -41,6 +41,7 @@ from agent import verify_source as vs  # noqa: E402
 
 PORT = 8796
 CHAIN = "button-accept.jsonl"
+PERS = str(ROOT / "runs" / "button-accept-cs.json")  # temp persist (gitignored), not the tracked file
 BASE = f"http://127.0.0.1:{PORT}"
 DAYTONA = "https://wheretodetect.org/metal-detecting/florida/daytona-beach/"
 COCOA = "https://wheretodetect.org/metal-detecting/florida/cocoa-beach/"
@@ -83,7 +84,8 @@ def _has(receipts, rtype, place):
 
 def main() -> int:
     vs.fetch = _ok_fetch  # hermetic; the index-only restriction still applies to the URL
-    server = andy_viewer.build_server(PORT, chat_chain=CHAIN, reset=True)
+    Path(PERS).unlink(missing_ok=True)
+    server = andy_viewer.build_server(PORT, chat_chain=CHAIN, reset=True, persist_path=PERS)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     checks = {}
     try:

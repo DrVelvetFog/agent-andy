@@ -164,6 +164,14 @@ def answer(chain, place: str, strict: bool = False, store=None) -> dict:
             out["query"] = place
             out["decision"] = ANSWERED_WITH_CAVEAT
         else:
+            # If the earned-answers file is unreadable (or this place's entry is
+            # broken), say so — a bad file never silently drops to Tier 2.
+            if store is not None:
+                ur = store.unreadable_reason(place)
+                if ur:
+                    out["persist_error"] = ur
+                    out["staging_reason"] = (out["staging_reason"] or "needs a human") + \
+                        " — earned answers file unreadable, so no saved answer was used"
             # Otherwise Tier 2 (the sitemap index) can add a candidate to the stage,
             # and we remember it so "verify it" knows which page to fetch.
             name, st = _split_place_state(place)
@@ -189,6 +197,11 @@ def answer(chain, place: str, strict: bool = False, store=None) -> dict:
         "staging_reason": out["staging_reason"],
         "tier2_candidates": out["tier2_candidates"],  # index candidates — NOT verdicts
         "tier2_reason": out["tier2_reason"],
+        # Confirmed-secondary provenance (present only on a persisted/approved answer):
+        "approval_date": out.get("approval_date"),
+        "page_sha256": out.get("page_sha256"),
+        "verify_promote_ref": out.get("verify_promote_ref"),
+        "persist_error": out.get("persist_error"),
     })
     return {"scope_receipt": scope_receipt, "answer_receipt": answer_receipt,
             "outcome": out, "decision": out["decision"]}

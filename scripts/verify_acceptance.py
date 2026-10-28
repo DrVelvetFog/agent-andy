@@ -34,6 +34,7 @@ from receipts import ReceiptChain, verify_chain  # noqa: E402
 
 RUNS = ROOT / "runs"
 CHAIN = RUNS / "verify-receipts.jsonl"
+PERS = RUNS / "verify-accept-cs.json"  # temp persist file (gitignored) — not the tracked one
 # A real location URL that IS in the index, so the fetch restriction passes.
 INDEX_URL = "https://wheretodetect.org/metal-detecting/florida/daytona-beach/"
 
@@ -84,6 +85,7 @@ def _fail_fetch(url, timeout=30.0):
 def main() -> int:
     RUNS.mkdir(exist_ok=True)
     CHAIN.unlink(missing_ok=True)
+    PERS.unlink(missing_ok=True)
     chain = ReceiptChain(CHAIN)
     checks = {}
     saved = vs.fetch
@@ -111,7 +113,7 @@ def main() -> int:
     checks["e. a law/guide page (not a location): fails closed"] = (not e["ok"])
 
     # ---- f. fetch failure stages, never promotes ----
-    store_f = KnowledgeStore()
+    store_f = KnowledgeStore(persist_path=str(PERS))
     vs.fetch = _fail_fetch
     try:
         rf = store_f.propose(chain, "Daytona Beach", INDEX_URL)
@@ -130,7 +132,7 @@ def main() -> int:
         called["fetch"] = True
         return {"ok": True, "html": STANDARD, "sha256": "x", "bytes": 1}
 
-    store_g = KnowledgeStore()
+    store_g = KnowledgeStore(persist_path=str(PERS))
     vs.fetch = _tripwire
     try:
         rg = store_g.propose(chain, "Evil Place", "https://evil.example/x")
@@ -144,7 +146,7 @@ def main() -> int:
         and bool(g_rcpt) and g_rcpt[-1]["reason"] == "URL not in site index")
 
     # ---- h. confirmed-secondary caveat in BOTH the reply and the receipt ----
-    store_h = KnowledgeStore()
+    store_h = KnowledgeStore(persist_path=str(PERS))
     vs.fetch = _ok_fetch(STANDARD)
     try:
         store_h.propose(chain, "Testville Beach", INDEX_URL)

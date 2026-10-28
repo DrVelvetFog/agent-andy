@@ -53,8 +53,10 @@ PAGE = Path(__file__).resolve().parent / "index.html"
 CHAT: dict = {"chain_name": "chat-live.jsonl", "chain": None, "daemon": None, "store": None}
 
 
-def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True) -> None:
-    """Start (or reset) the live chat chain and its daemon for this process."""
+def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True, persist_path=None) -> None:
+    """Start (or reset) the live chat chain and its daemon for this process. The
+    KnowledgeStore loads any earned answers from persist_path (the real
+    data/confirmed_secondary.json by default; tests pass a temp path)."""
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / chain_name
     if reset:
@@ -65,7 +67,7 @@ def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True) -> None:
                       "summary": "chat session started — typed and voice both go through the checker"})
     CHAT.update({"chain_name": chain_name, "chain": chain,
                  "daemon": Daemon() if _DAEMON_AVAILABLE else None,
-                 "store": KnowledgeStore()})
+                 "store": KnowledgeStore(persist_path=persist_path)})
 
 
 def chat_message(message: str, voice_mode="auto", run_general: bool = True) -> dict:
@@ -285,10 +287,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def build_server(port: int, chat_chain: str = "chat-live.jsonl",
-                 reset: bool = True) -> ThreadingHTTPServer:
+                 reset: bool = True, persist_path=None) -> ThreadingHTTPServer:
     """Create the viewer+chat server, binding 127.0.0.1 only, with a fresh chat
-    session. Shared by main() and the acceptance test."""
-    init_chat(chat_chain, reset=reset)
+    session. Shared by main() and the acceptance tests (which pass a temp
+    persist_path to avoid touching the tracked earned-answers file)."""
+    init_chat(chat_chain, reset=reset, persist_path=persist_path)
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
