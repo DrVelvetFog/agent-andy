@@ -90,6 +90,34 @@ check, and the reply says plainly that the primary source is unverified and a
 human must confirm it before any verdict. It is **not** a verified location
 database, and **not** a claim about how many locations the site covers.
 
+**Verify-on-demand — Andy earns new knowledge, with proof.** Rather than leaving a
+Tier 2 candidate at "go check it," you can say *"verify it."* Andy fetches the
+candidate page and extracts — **deterministically, no model, so nothing can be
+hallucinated** — the page's verdict, a **verbatim** rule quote, the primary source
+it names, and the date, checking every quote actually appears on the page and
+**failing closed** if the structure isn't there. That produces a *proposed* answer
+**staged for your approval** — never acted on until you say *"approve."* On
+approval the place answers as a **confirmed secondary**: it names a primary, is
+labeled *"I read the site, not the ordinance — confirm the primary,"* and is never
+treated as Tier-1 grade. Every step is a receipt (`verify_fetch` with a hash of
+what was fetched, `verify_extract` with the verbatim quote, `verify_promote` with
+your approval), so the knowledge base grows only by proof you can replay.
+
+## Try the verify-on-demand test
+
+```bash
+python3 scripts/verify_acceptance.py
+```
+
+Proves the self-growing loop stays honest: deterministic extraction reads a
+templated page's verdict + a verbatim quote + the named source (and fails closed
+on a page whose structure is missing); fetch and extract are **staged for your
+approval**, so the place does not answer until you approve it; on approval it
+answers as a **confirmed secondary** that names a primary and is labeled not-the-
+ordinance; a failed extraction never promotes; every step is receipted and the
+chain verifies. Core runs hermetically against a fixture; a live fetch of a real
+page is reported at the end.
+
 ## Try the voice test
 
 ```bash
@@ -259,6 +287,17 @@ so it runs offline.
   check; a place in the index but not Tier 1 stages with its candidate URL and the
   unverified-primary reason; a place in neither tier, or a fictional one, stages
   with no candidate and no invented URL. `scripts/detect_acceptance.py` (two-tier).
+- **Oct 28 (verify-on-demand):** Andy can now *earn* knowledge, with proof. On
+  "verify it," `agent/verify_source.py` fetches a Tier 2 candidate page and extracts
+  its verdict, a **verbatim** rule quote, the named primary, and the date —
+  **deterministically, no model**, checking each quote is verbatim and failing
+  closed if the structure is missing. The result is staged for the owner's
+  approval (`verify_fetch` + `verify_extract` receipts, nothing acted on); on
+  "approve" the place becomes a **confirmed secondary** answer that names a primary
+  and is labeled not-the-ordinance (`verify_promote` receipt). Wired through the
+  chat as `verify`/`approve` intents; a `KnowledgeStore` holds the session's earned
+  answers. The knowledge base grows only by replayable proof.
+  `scripts/verify_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

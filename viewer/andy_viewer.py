@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 from receipts import ReceiptChain, verify_chain  # noqa: E402  (after sys.path insert)
 from agent import voice  # noqa: E402  — the real gated chat path (typed + spoken share it)
+from agent.verify_source import KnowledgeStore  # noqa: E402  — verify-on-demand session memory
 
 # The daemon slot renders real suggestions ONLY if a daemon module exists in this
 # checkout. If it does not, the slot stays hidden and silent — never faked.
@@ -49,7 +50,7 @@ PAGE = Path(__file__).resolve().parent / "index.html"
 
 # Live chat session state (one per server process). The chain is a REAL chain
 # under runs/, so every receipt the page shows is a read of a real receipt.
-CHAT: dict = {"chain_name": "chat-live.jsonl", "chain": None, "daemon": None}
+CHAT: dict = {"chain_name": "chat-live.jsonl", "chain": None, "daemon": None, "store": None}
 
 
 def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True) -> None:
@@ -63,7 +64,8 @@ def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True) -> None:
         chain.append({"type": "session_start",
                       "summary": "chat session started — typed and voice both go through the checker"})
     CHAT.update({"chain_name": chain_name, "chain": chain,
-                 "daemon": Daemon() if _DAEMON_AVAILABLE else None})
+                 "daemon": Daemon() if _DAEMON_AVAILABLE else None,
+                 "store": KnowledgeStore()})
 
 
 def chat_message(message: str, voice_mode="auto", run_general: bool = True) -> dict:
@@ -74,7 +76,7 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True) -> d
     if not message or not message.strip():
         return {"error": "empty message"}
     chain = CHAT["chain"]
-    res = voice.chat_turn(chain, message, daemon=CHAT["daemon"],
+    res = voice.chat_turn(chain, message, daemon=CHAT["daemon"], store=CHAT["store"],
                           voice=voice_mode, run_general=run_general)
     reply = res["reply"]
     d = res.get("daemon")

@@ -30,7 +30,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from . import checker, detect, loop, tts, witness
+from . import checker, detect, loop, tier2, tts, witness
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
@@ -78,12 +78,23 @@ _DETECT_RE = re.compile(
 )
 # packing-list intent -> ("witness", None)
 _WITNESS_RE = re.compile(r"\b(witness|packing list|packing-list|pack(?:ed)?\s+(?:my|the)\s+box)\b", re.IGNORECASE)
+# verify-on-demand: "verify it" / "verify <place>", and the owner's approval
+_VERIFY_RE = re.compile(r"\bverif(?:y|ies|ied)\b", re.IGNORECASE)
+_APPROVE_RE = re.compile(r"^\s*(?:yes|approve|confirm)\b", re.IGNORECASE)
 
 
 def route(transcript: str) -> tuple[str, str | None]:
-    """Deterministic intent routing for the two known commands; everything else
-    falls through to the Spark gated loop."""
+    """Deterministic intent routing for the known commands; everything else falls
+    through to the Spark gated loop."""
     t = transcript.strip()
+    if _APPROVE_RE.search(t):
+        m = re.search(r"(?:approve|confirm)\s+(.*)", t, re.IGNORECASE)
+        arg = m.group(1).strip().rstrip("?.! ") if m and m.group(1).strip() else None
+        return "approve", arg
+    if _VERIFY_RE.search(t):
+        m = re.search(r"verif(?:y|ies|ied)\s+(?:detecting\s+(?:at|in|on)\s+)?(.*)", t, re.IGNORECASE)
+        arg = m.group(1).strip().rstrip("?.! ") if m else ""
+        return "verify", (None if arg.lower() in ("it", "this", "that", "") else arg)
     m = _DETECT_RE.search(t)
     if m:
         return "detect", m.group(1).strip().rstrip("?.! ")
@@ -184,15 +195,39 @@ def _detect_reply(o: dict) -> str:
         where = c["label"] + (f", {c['state_from_path']}" if c.get("state_from_path") else "")
         reply += (f" There's a site-index candidate to check — {where} ({c['url']}), "
                   "a page label derived from the site's URL only, primary source not "
-                  "verified; a human must check it before any verdict.")
+                  "verified. Say “verify it” and I'll fetch the page to check.")
         extra = len(cands) - 1
         if extra:
             reply += f" (+{extra} more candidate{'s' if extra != 1 else ''}.)"
     return reply
 
 
+def _verify_candidate(chain, place, store) -> dict:
+    """Resolve the candidate page (a named place via Tier 2, or the last staged one)
+    and ask the store to fetch + extract it into a pending proposal. Builds the
+    reply, which presents the fetched verdict + verbatim quote and asks for approval,
+    and never phrases the candidate as a settled verdict."""
+    if store is None:
+        return {"ok": False, "reply": "Verify isn't available in this mode."}
+    if place:
+        cands = tier2.candidates(place)
+        if not cands:
+            return {"ok": False, "reply": f"I don't have a candidate page for {place} to verify."}
+        res = store.propose(chain, place, cands[0]["url"])
+    else:
+        res = store.propose(chain)  # the most recent staged candidate
+    if not res["ok"]:
+        return {"ok": False, "reply": f"I can't verify that yet — {res['error']}."}
+    p = res["proposal"]
+    reply = (f"I fetched the page for {p['place']}. It reads “{p['verdict']}”, citing "
+             f"{p['source']}, and quotes: “{p['quote'][:160]}”. That's a SECONDARY source — "
+             "I read your site, not the ordinance itself. Say “approve” to use it, or I'll "
+             "keep holding it.")
+    return {"ok": True, "proposal": p, "reply": reply}
+
+
 def handle(chain, transcript: str, source: str, photos=None, strict: bool = False,
-           voice: str | bool = "auto", daemon=None) -> dict:
+           voice: str | bool = "auto", daemon=None, store=None) -> dict:
     """Route one transcript (live or injected) through the gated paths. The
     transcript's source is receipted so a reader can tell a real transcription
     from an injected one. `voice` is passed to speak() — pass voice=False in
@@ -211,7 +246,7 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 
     intent, arg = route(transcript)
     if intent == "detect":
-        res = detect.answer(chain, arg, strict=strict)
+        res = detect.answer(chain, arg, strict=strict, store=store)
         reply = speak(_detect_reply(res["outcome"]), chain, voice=voice)
         result = {"intent": "detect", "source": source, "place": arg,
                   "result": res, "reply": reply}
@@ -232,7 +267,8 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 
 
 def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
-              play: bool = False, run_general: bool = True, strict: bool = False) -> dict:
+              play: bool = False, run_general: bool = True, strict: bool = False,
+              store=None) -> dict:
     """One TYPED chat message through the SAME gate as spoken input.
 
     The input is receipted as `chat_input` with source `typed` — never dressed up
@@ -254,8 +290,22 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
 
     intent, arg = route(message)
     daemon_src = None
-    if intent == "detect":
-        res = detect.answer(chain, arg, strict=strict)
+    if intent == "verify":
+        res = _verify_candidate(chain, arg, store)
+        reply_text = res["reply"]
+        payload = {"intent": "verify", "result": res}
+    elif intent == "approve":
+        if store is None:
+            reply_text = "Approving isn't available in this mode."
+            res = {"ok": False}
+        else:
+            res = store.confirm(chain, arg)
+            reply_text = (f"Approved — {res['place']} is now a confirmed secondary answer for this "
+                          "session; ask me again and I'll answer it, labeled secondary."
+                          if res["ok"] else f"Nothing to approve — {res['error']}.")
+        payload = {"intent": "approve", "result": res}
+    elif intent == "detect":
+        res = detect.answer(chain, arg, strict=strict, store=store)
         reply_text = _detect_reply(res["outcome"])
         daemon_src = res
         payload = {"intent": "detect", "place": arg, "result": res}

@@ -223,6 +223,11 @@ function classify(a) {
     ? { tier: 'allow', label: 'READY TO SHIP', reason: 'every item verified' }
     : { tier: 'stage', label: 'NOT SHIPPED', reason: 'unverified: ' + ((a.unverified_items || []).join(', ') || '—') };
   if (t === 'daemon_dismissed') return { tier: 'neutral', label: 'DISMISSED', reason: 'silent for the session' };
+  if (t === 'verify_fetch') return { tier: 'plan', label: 'FETCHED', reason: a.fetched_ok ? a.url : ('fetch failed: ' + (a.reason || '')) };
+  if (t === 'verify_extract') return a.extract_ok
+    ? { tier: 'stage', label: 'EXTRACTED', reason: 'verbatim-checked · staged for your approval · not executed' }
+    : { tier: 'stage', label: 'EXTRACT FAILED', reason: 'fail-closed: ' + (a.reason || '') };
+  if (t === 'verify_promote') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — confirmed secondary (names a primary)' };
   if (t === 'voice_output') return { tier: 'plan', label: a.kind === 'daemon' ? 'DAEMON SPOKE' : 'SPOKE', reason: a.tts_engine ? 'voice: ' + a.tts_engine : 'text only' };
   if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
   if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || '') };

@@ -134,7 +134,7 @@ def evaluate_query(place: str, strict: bool = False) -> dict:
     return out
 
 
-def answer(chain, place: str, strict: bool = False) -> dict:
+def answer(chain, place: str, strict: bool = False, store=None) -> dict:
     """Handle one 'can I detect here?' query as a full, receipted turn.
 
     Two receipts land: the scope gate (the policy engine ruling that a rule
@@ -151,17 +151,28 @@ def answer(chain, place: str, strict: bool = False) -> dict:
                 "outcome": None, "decision": STAGED}
 
     out = evaluate_query(place, strict=strict)
-
-    # Tier 2 sits BEHIND Tier 1: it can only add a candidate to a STAGE, and never
-    # changes an answer. A Tier 1 match that answers gets no Tier 2 lookup at all.
     out["tier2_candidates"] = []
     out["tier2_reason"] = None
+
+    # Only a STAGE can be changed from here — a Tier 1 answer is never touched.
     if out["decision"] == STAGED:
-        name, st = _split_place_state(place)
-        cands = tier2.candidates(name, st)
-        if cands:
-            out["tier2_candidates"] = cands
-            out["tier2_reason"] = TIER2_REASON
+        # A place the owner VERIFIED and APPROVED earlier this session answers as a
+        # confirmed secondary (names a primary), overriding the stage.
+        confirmed = store.get(place) if store is not None else None
+        if confirmed is not None:
+            out = dict(confirmed)
+            out["query"] = place
+            out["decision"] = ANSWERED_WITH_CAVEAT
+        else:
+            # Otherwise Tier 2 (the sitemap index) can add a candidate to the stage,
+            # and we remember it so "verify it" knows which page to fetch.
+            name, st = _split_place_state(place)
+            cands = tier2.candidates(name, st)
+            if cands:
+                out["tier2_candidates"] = cands
+                out["tier2_reason"] = TIER2_REASON
+                if store is not None:
+                    store.note_candidate(place, cands[0]["url"])
 
     answer_receipt = chain.append({
         "type": "detect_answer",
