@@ -207,13 +207,29 @@ class KnowledgeStore:
         self.last_candidate = (place, url)
 
     def pending_list(self) -> list[dict]:
-        """The proposals awaiting the owner's decision, each with ALL of its
-        evidence — so the UI can show it before any Approve button, never a blind
-        approval. This is a read of session state, not a new trust surface."""
-        return [{"place": p["place"], "url": p["url"], "verdict": p["verdict"],
-                 "quote": p["quote"], "source": p["source"],
-                 "verified_date": p["verified_date"], "caveat": _pending_caveat(p["source"])}
-                for p in self.pending.values()]
+        """Everything awaiting the owner's decision, each with its evidence — so the
+        UI can show it before any Approve button, never a blind approval. Two kinds:
+        a verify proposal (a secondary answer) and a task note (a write held because
+        it depends on a staged result)."""
+        out = []
+        for p in self.pending.values():
+            if p.get("kind") == "note":
+                out.append({"kind": "note", "place": p["place"], "note_text": p["note_text"]})
+            else:
+                out.append({"kind": "verify", "place": p["place"], "url": p["url"],
+                            "verdict": p["verdict"], "quote": p["quote"], "source": p["source"],
+                            "verified_date": p["verified_date"], "caveat": _pending_caveat(p["source"])})
+        return out
+
+    def stage_note(self, chain, place: str, note_text: str) -> dict:
+        """Hold a note for the owner's approval because it depends on a staged result.
+        The note is NOT written until approved — it rides the SAME pending/approve
+        path as a verify proposal, so the same buttons and intents work."""
+        self.pending[_norm(place)] = {"kind": "note", "place": place, "note_text": note_text}
+        chain.append({"type": "task_step", "step": "note", "status": "waiting",
+                      "summary": f"note '{place}' waiting for owner approval (depends on a staged result)",
+                      "place": place, "executed": False})
+        return {"ok": True, "place": place}
 
     def decline(self, chain, place: str | None = None) -> dict:
         """The owner declines a pending proposal. Receipted; clears ONLY that
@@ -222,6 +238,13 @@ class KnowledgeStore:
         key = _norm(place) if place else (next(iter(self.pending)) if len(self.pending) == 1 else None)
         if key is None or key not in self.pending:
             return {"ok": False, "error": "nothing pending to decline"}
+        if self.pending[key].get("kind") == "note":
+            p = self.pending.pop(key)
+            chain.append({"type": "task_declined", "step": "note",
+                          "summary": f"owner declined the {p['place']} — step skipped, not written",
+                          "place": p["place"], "declined_by": "owner",
+                          "declined_on": time.strftime("%Y-%m-%d", time.gmtime())})
+            return {"ok": True, "place": p["place"], "kind": "note", "skipped": True}
         p = self.pending.pop(key)
         chain.append({"type": "verify_decline",
                       "summary": f"owner declined {p['place']} — still staged, not answered",
@@ -283,6 +306,8 @@ class KnowledgeStore:
         key = _norm(place) if place else (next(iter(self.pending)) if len(self.pending) == 1 else None)
         if key is None or key not in self.pending:
             return {"ok": False, "error": "nothing pending to approve"}
+        if self.pending[key].get("kind") == "note":
+            return self._confirm_note(chain, key)
         p = self.pending.pop(key)
         approval_date = time.strftime("%Y-%m-%d", time.gmtime())
         receipt = chain.append({"type": "verify_promote",
@@ -311,3 +336,15 @@ class KnowledgeStore:
         data["entries"][key] = entry
         _write_persist(self.persist_path, data)
         self.persist_error = None  # the file is good again after a successful write
+
+    def _confirm_note(self, chain, key: str) -> dict:
+        """Owner approved a held note: an approval receipt lands first, then the note
+        is written through the EXISTING note tool (sandboxed) — no new tool."""
+        from . import tools
+        p = self.pending.pop(key)
+        chain.append({"type": "task_approved", "step": "note",
+                      "summary": f"owner approved writing the {p['place']}",
+                      "place": p["place"], "approved_by": "owner",
+                      "approved_on": time.strftime("%Y-%m-%d", time.gmtime())})
+        res = tools.run(chain, "note", summary=f"save the {p['place']} to the sandbox", text=p["note_text"])
+        return {"ok": True, "place": p["place"], "kind": "note", "note_written": res["executed"]}

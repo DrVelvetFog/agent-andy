@@ -30,7 +30,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from . import checker, detect, loop, policy, tier2, tts, witness
+from . import checker, detect, loop, policy, task, tier2, tts, witness
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
@@ -100,6 +100,8 @@ def route(transcript: str) -> tuple[str, str | None]:
         m = re.search(r"verif(?:y|ies|ied)\s+(?:detecting\s+(?:at|in|on)\s+)?(.*)", t, re.IGNORECASE)
         arg = m.group(1).strip().rstrip("?.! ") if m else ""
         return "verify", (None if arg.lower() in ("it", "this", "that", "") else arg)
+    if task.is_task(t):
+        return "task", t
     m = _DETECT_RE.search(t)
     if m:
         return "detect", m.group(1).strip().rstrip("?.! ")
@@ -311,10 +313,16 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             res = {"ok": False}
         else:
             res = store.confirm(chain, arg)
-            reply_text = (f"Approved — {res['place']} is now a confirmed secondary answer for this "
-                          "session (I read the site, not the ordinance — confirm the primary). Ask me "
-                          "again and I'll answer it, labeled secondary."
-                          if res["ok"] else f"Nothing to approve — {res['error']}.")
+            if not res["ok"]:
+                reply_text = f"Nothing to approve — {res['error']}."
+            elif res.get("kind") == "note":
+                reply_text = ("Approved — the trip note was written to the sandbox: it states Myrtle "
+                              "Beach allowed with its citation, and Tybee Island unverified and staged, "
+                              "not answered.")
+            else:
+                reply_text = (f"Approved — {res['place']} is now a confirmed secondary answer for this "
+                              "session (I read the site, not the ordinance — confirm the primary). Ask me "
+                              "again and I'll answer it, labeled secondary.")
         payload = {"intent": "approve", "result": res}
     elif intent == "decline":
         if store is None:
@@ -322,10 +330,18 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             res = {"ok": False}
         else:
             res = store.decline(chain, arg)
-            reply_text = (f"Declined — {res['place']} stays staged, not answered; you can verify it "
-                          "again later with a fresh fetch."
-                          if res["ok"] else f"Nothing to decline — {res['error']}.")
+            if not res["ok"]:
+                reply_text = f"Nothing to decline — {res['error']}."
+            elif res.get("kind") == "note":
+                reply_text = "Declined — the trip note was skipped and not written; nothing was saved."
+            else:
+                reply_text = (f"Declined — {res['place']} stays staged, not answered; you can verify it "
+                              "again later with a fresh fetch.")
         payload = {"intent": "decline", "result": res}
+    elif intent == "task":
+        res = task.run_trip(chain, message, store, strict=strict)
+        reply_text = res["reply"]
+        payload = {"intent": "task", "result": res}
     elif intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
         reply_text = _detect_reply(res["outcome"])

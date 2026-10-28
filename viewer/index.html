@@ -282,6 +282,10 @@ function classify(a) {
     : { tier: 'stage', label: 'EXTRACT FAILED', reason: 'fail-closed: ' + (a.reason || '') };
   if (t === 'verify_promote') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — confirmed secondary (names a primary)' };
   if (t === 'verify_decline') return { tier: 'neutral', label: 'DECLINED', reason: 'owner declined — still staged, not answered' };
+  if (t === 'task_plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || ((a.steps || []).length + ' steps') };
+  if (t === 'task_step') return { tier: 'stage', label: 'STEP · WAITING', reason: 'note held for your approval (depends on a staged result)' };
+  if (t === 'task_approved') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — note written to the sandbox' };
+  if (t === 'task_declined') return { tier: 'neutral', label: 'SKIPPED', reason: 'owner declined — note skipped, not written' };
   if (t === 'voice_output') return { tier: 'plan', label: a.kind === 'daemon' ? 'DAEMON SPOKE' : 'SPOKE', reason: a.tts_engine ? 'voice: ' + a.tts_engine : 'text only' };
   if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
   if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || '') };
@@ -386,17 +390,28 @@ function renderProposals(list) {
   (list || []).forEach(p => {
     const el = document.createElement('div');
     el.className = 'proposal';
-    el.innerHTML =
-      '<div class="plabel">⬦ VERIFY PROPOSAL · ' + esc(p.place) + ' · review the evidence, then decide</div>' +
-      '<div class="ev"><b>verdict</b> ' + esc(p.verdict) + '  ·  <b>last verified</b> ' + esc(p.verified_date || '—') + '</div>' +
-      '<div class="ev"><b>quote</b> <span class="quote">“' + esc(p.quote) + '”</span></div>' +
-      '<div class="ev"><b>source</b> ' + esc(p.source) + '</div>' +
-      '<div class="ev"><b>page</b> <a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(p.url) + '</a></div>' +
-      '<div class="cav">' + esc(p.caveat) + '</div>' +
-      '<div class="pbtns">' +
-        '<button class="approve" data-place="' + esc(p.place) + '">Approve ' + esc(p.place) + '</button>' +
-        '<button class="decline" data-place="' + esc(p.place) + '">Decline</button>' +
-      '</div>';
+    if (p.kind === 'note') {
+      el.innerHTML =
+        '<div class="plabel">⬦ NOTE · ' + esc(p.place) + ' · held because a result is staged — approve to write it</div>' +
+        '<div class="ev"><span class="quote">' + esc(p.note_text) + '</span></div>' +
+        '<div class="cav">Writes to runs/sandbox only. It states Tybee Island as unverified / staged, never allowed.</div>' +
+        '<div class="pbtns">' +
+          '<button class="approve" data-place="' + esc(p.place) + '">Approve — write it</button>' +
+          '<button class="decline" data-place="' + esc(p.place) + '">Decline</button>' +
+        '</div>';
+    } else {
+      el.innerHTML =
+        '<div class="plabel">⬦ VERIFY PROPOSAL · ' + esc(p.place) + ' · review the evidence, then decide</div>' +
+        '<div class="ev"><b>verdict</b> ' + esc(p.verdict) + '  ·  <b>last verified</b> ' + esc(p.verified_date || '—') + '</div>' +
+        '<div class="ev"><b>quote</b> <span class="quote">“' + esc(p.quote) + '”</span></div>' +
+        '<div class="ev"><b>source</b> ' + esc(p.source) + '</div>' +
+        '<div class="ev"><b>page</b> <a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(p.url) + '</a></div>' +
+        '<div class="cav">' + esc(p.caveat) + '</div>' +
+        '<div class="pbtns">' +
+          '<button class="approve" data-place="' + esc(p.place) + '">Approve ' + esc(p.place) + '</button>' +
+          '<button class="decline" data-place="' + esc(p.place) + '">Decline</button>' +
+        '</div>';
+    }
     proposalSlot.appendChild(el);
   });
 }
