@@ -99,7 +99,7 @@ class Daemon:
             "executed": False,             # ...but NEVER executed by the daemon
             "spoken": text,
         })
-        reply = voice.speak(text, chain, voice=voice_mode)   # the shared speak() seam
+        reply = voice.speak(text, chain, voice=voice_mode, kind="daemon")   # shared speak() seam
         self._spoke_in_task = True
         return {"spoke": True, "about": staged["label"], "text": text,
                 "verdict": verdict, "executed": False, "receipt": receipt, "reply": reply}

@@ -102,20 +102,28 @@ lives in `.env.local` (gitignored, read from `ELEVENLABS_API_KEY`); if it is
 missing or the call fails, Andy falls back to text and never fakes a voice.
 *Next:* pick voice vs. text automatically from whether headphones are connected.
 
-## See the receipts — live viewer
+## Run the demo — chat + receipts
 
 ```bash
-python3 viewer/andy_viewer.py          # then open http://127.0.0.1:8799
+./start-andy.sh            # serves 127.0.0.1:8799 and opens the page
 ```
 
-A local window onto the real chains under `runs/`. Each receipt lands on a
-timeline, colored by the checker's verdict — green *allow* (ran), amber *stage*
-(held for a human), red *block* (refused). **Verify** runs the project's own
-`receipts/verify.py`, recomputing every hash from genesis; **Flip one byte**
-changes one character of one receipt in a throwaway copy — the real chain is
-never touched — and verification fails, by receipt number. Stdlib only, binds to
-`127.0.0.1` only; nothing leaves the laptop. (No chains yet? Generate one with no
-API key: `python3 scripts/day1_acceptance.py`.)
+One local page, two panes. **Left: talk to Andy.** Type a message (or let a voice
+transcript land) and it runs through the *same* gate as everything else — detect,
+witness, or the policy engine on the raw request — then replies in text and the
+ElevenLabs voice. Typed input is the live-demo fallback: if voice or the Model API
+is down on stage, you keep going by typing, stated plainly on screen, never hidden
+as a transcription. A daemon suggestion appears — above the checker bar, with a
+Dismiss button — only when the daemon module actually produces one.
+
+**Right: the receipt chain.** Each turn lands on a timeline colored by the
+checker's verdict — green *allow*, amber *stage*, red *block*, purple *daemon*.
+**Verify** runs the project's own `receipts/verify.py`, recomputing every hash
+from genesis; **Flip one byte** changes one character of one receipt in a
+throwaway copy — the real chain is never touched — and verification fails, by
+receipt number. Every receipt the page shows is a real line from a chain under
+`runs/`; the UI is a read of real receipts, not a new trust surface. Stdlib only,
+`127.0.0.1` only.
 
 ## Try the daemon test
 
@@ -131,6 +139,20 @@ trigger only; one dismissal silences the whole session (and the dismissal is
 itself a receipt); never a word about people, text fields, or off-task content;
 and a suggestion is gated by the policy engine and receipted, but **never
 executed** — acting on it is the human's move. No network, no model.
+
+## Try the chat test
+
+```bash
+python3 scripts/chat_acceptance.py
+```
+
+Starts the real server (127.0.0.1 only) and drives the endpoints the page calls:
+a typed "Myrtle Beach" answers *allowed* with a citation and a real verifying
+receipt; a typed "Tybee Island" comes back **staged** with the unverified reason
+(the UI never turns a stage into a confident answer); an out-of-scope request is
+**blocked**, receipted, and never executed; **Verify** and **Flip one byte** work
+on the live chat chain; and an answered turn produces no daemon speech. Voice off,
+so it runs offline.
 
 ## Build log — what was built Oct 26 – Nov 4
 
@@ -207,6 +229,15 @@ executed** — acting on it is the human's move. No network, no model.
   The suggestion is gated by the policy engine and receipted with its verdict, but
   **never executed** — it is a surface on the loop, not a second actor. Off by
   default (the loop is unchanged without one). `scripts/daemon_acceptance.py`.
+- **Oct 28 (talk interface):** the viewer gains a chat pane beside the timeline —
+  one local page, same server, same `127.0.0.1`-only binding, stdlib only. A typed
+  message (`voice.chat_turn`) runs through the same gate as spoken input, stamped
+  honestly as `typed` (never a transcription); the general path is ruled on by the
+  policy engine directly, so an off-scope request is blocked and receipted without
+  ever running. Andy replies in text + the ElevenLabs voice; the daemon slot
+  renders only real suggestions, with a Dismiss button. A one-line launcher,
+  `./start-andy.sh`, starts the server, opens the page, and prints the typed-chat
+  fallback. `viewer/andy_viewer.py`, `viewer/index.html`, `scripts/chat_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Andy — Receipt Chain</title>
+<title>Agent Andy</title>
 <style>
   :root {
     --bg: #0b0e14;
@@ -17,35 +17,67 @@
     --stage: #f2b84b;
     --block: #ff5c6c;
     --plan: #5aa9ff;
+    --daemon: #b98cff;
     --neutral: #7a8aa0;
     --allow-bg: rgba(53,208,127,.10);
     --stage-bg: rgba(242,184,75,.10);
     --block-bg: rgba(255,92,108,.10);
     --plan-bg: rgba(90,169,255,.10);
+    --daemon-bg: rgba(185,140,255,.10);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px 72px; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 24px 16px 64px; }
 
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-    border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 18px; }
+    border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 18px; }
   header h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
   header .thesis { color: var(--muted); font-size: 13px; }
   header .thesis b { color: var(--ink); font-weight: 600; }
 
-  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-  select, button {
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .pane h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600;
+    letter-spacing: .3px; text-transform: uppercase; }
+
+  select, button, input {
     font: inherit; font-size: 13px; color: var(--ink); background: var(--panel);
-    border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer;
-  }
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  button { cursor: pointer; }
   button:hover { border-color: #3a4e72; }
   button:disabled { opacity: .45; cursor: default; }
   button.primary { background: #16304e; border-color: #27507f; }
   button.danger { background: #3a1620; border-color: #6e2634; color: #ffd4d9; }
 
+  /* ---- chat pane ---- */
+  .fallback { font-size: 12.5px; color: var(--muted); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; }
+  .fallback b { color: var(--ink); }
+  .convo { min-height: 240px; max-height: 52vh; overflow-y: auto; display: flex;
+    flex-direction: column; gap: 10px; padding: 4px 2px; }
+  .bubble { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
+  .bubble .who { font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    letter-spacing: .3px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+  .bubble.you { align-self: flex-end; background: #16304e; border: 1px solid #27507f; }
+  .bubble.andy { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); }
+  .bubble .play { cursor: pointer; color: var(--plan); font-size: 11px; border: none; background: none; padding: 0; }
+  .convo .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+
+  .daemon-slot { margin: 12px 0 0; padding: 11px 13px; border-radius: 10px;
+    background: var(--daemon-bg); border: 1px solid #4b3a73; }
+  .daemon-slot .dlabel { font-family: var(--mono); font-size: 10.5px; color: var(--daemon);
+    letter-spacing: .4px; margin-bottom: 4px; }
+  .daemon-slot .dtext { font-size: 13px; line-height: 1.4; margin-bottom: 9px; }
+  .daemon-slot button { font-size: 12px; padding: 5px 11px; }
+
+  .inputrow { display: flex; gap: 8px; margin-top: 12px; }
+  .inputrow input { flex: 1; }
+
+  /* ---- receipts pane ---- */
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
   .badge { display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
-    font-family: var(--mono); font-size: 13px; padding: 7px 12px; border-radius: 8px;
+    font-family: var(--mono); font-size: 12px; padding: 6px 10px; border-radius: 8px;
     border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
   .badge .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--neutral); }
   .badge.ok { color: var(--allow); border-color: #1f5a3c; background: var(--allow-bg); }
@@ -53,101 +85,130 @@
   .badge.fail { color: var(--block); border-color: #6e2634; background: var(--block-bg); }
   .badge.fail .dot { background: var(--block); }
 
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted);
-    font-size: 12px; margin: 2px 0 18px; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 11.5px; margin: 2px 0 14px; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-  .chain { position: relative; padding-left: 26px; }
-  .chain::before { content: ""; position: absolute; left: 10px; top: 6px; bottom: 6px;
-    width: 2px; background: var(--line); }
-
+  .chain { position: relative; padding-left: 24px; max-height: 60vh; overflow-y: auto; }
+  .chain::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
   .receipt { position: relative; background: var(--panel); border: 1px solid var(--line);
-    border-left-width: 3px; border-radius: 10px; padding: 12px 14px; margin: 0 0 12px;
+    border-left-width: 3px; border-radius: 10px; padding: 10px 13px; margin: 0 0 10px;
     opacity: 0; transform: translateY(6px); transition: opacity .28s ease, transform .28s ease, border-color .2s, background .2s; }
   .receipt.show { opacity: 1; transform: none; }
-  .receipt::before { content: ""; position: absolute; left: -20px; top: 16px;
-    width: 10px; height: 10px; border-radius: 50%; background: var(--neutral);
-    border: 2px solid var(--bg); }
+  .receipt::before { content: ""; position: absolute; left: -19px; top: 15px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--neutral); border: 2px solid var(--bg); }
   .receipt.allow { border-left-color: var(--allow); } .receipt.allow::before { background: var(--allow); }
   .receipt.stage { border-left-color: var(--stage); } .receipt.stage::before { background: var(--stage); }
   .receipt.block { border-left-color: var(--block); } .receipt.block::before { background: var(--block); }
   .receipt.plan  { border-left-color: var(--plan);  } .receipt.plan::before  { background: var(--plan); }
+  .receipt.daemon { border-left-color: var(--daemon); } .receipt.daemon::before { background: var(--daemon); }
   .receipt.neutral { border-left-color: var(--neutral); }
-
   .receipt.tampered { background: var(--block-bg); border-color: var(--block); }
   .receipt.tampered .summary { text-decoration: line-through; text-decoration-color: var(--block); }
 
-  .r-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-  .seq { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .pill { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .4px;
+  .r-top { display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+  .seq { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .pill { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .4px;
     padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
   .pill.allow { color: var(--allow); background: var(--allow-bg); border-color: #1f5a3c; }
   .pill.stage { color: var(--stage); background: var(--stage-bg); border-color: #6b531f; }
   .pill.block { color: var(--block); background: var(--block-bg); border-color: #6e2634; }
   .pill.plan  { color: var(--plan);  background: var(--plan-bg);  border-color: #26476e; }
+  .pill.daemon { color: var(--daemon); background: var(--daemon-bg); border-color: #4b3a73; }
   .pill.neutral { color: var(--neutral); background: rgba(122,138,160,.10); border-color: #2c3a52; }
-  .r-type { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
-  .summary { font-size: 15px; line-height: 1.35; }
-  .reason { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
-  .hashes { font-family: var(--mono); font-size: 11px; color: #5d6b80; margin-top: 8px;
-    display: flex; gap: 14px; flex-wrap: wrap; }
+  .r-type { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-left: auto; }
+  .summary { font-size: 14px; line-height: 1.35; }
+  .reason { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .hashes { font-family: var(--mono); font-size: 10.5px; color: #5d6b80; margin-top: 7px; display: flex; gap: 12px; flex-wrap: wrap; }
   .hashes b { color: #7f8ea4; font-weight: 500; }
 
-  footer { margin-top: 26px; color: #5d6b80; font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+  footer { margin-top: 22px; color: #5d6b80; font-size: 11.5px; border-top: 1px solid var(--line); padding-top: 12px; }
   footer code { font-family: var(--mono); color: var(--muted); }
-  .empty { color: var(--muted); font-size: 14px; padding: 30px 0; }
   .empty code { font-family: var(--mono); color: var(--ink); background: var(--panel); padding: 2px 6px; border-radius: 5px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Agent&nbsp;Andy&nbsp;·&nbsp;Receipt&nbsp;Chain</h1>
-    <div class="thesis">The claim is never &ldquo;trust me.&rdquo; It is <b>here is the chain &mdash; recompute it.</b></div>
+    <h1>Agent&nbsp;Andy</h1>
+    <div class="thesis">Checks a local rule before you act, and <b>proves it</b> — every turn leaves a receipt.</div>
   </header>
 
-  <div class="controls">
-    <label for="chain" style="color:var(--muted);font-size:13px">chain</label>
-    <select id="chain"></select>
-    <button id="replay" class="primary">▶ Replay run</button>
-    <button id="verify">✓ Verify chain</button>
-    <button id="tamper" class="danger">⚡ Flip one byte</button>
-    <div id="badge" class="badge"><span class="dot"></span><span id="badge-text">not yet verified</span></div>
-  </div>
+  <div class="layout">
+    <!-- ================= CHAT ================= -->
+    <section class="pane">
+      <h2>Talk to Andy</h2>
+      <div class="fallback">
+        Voice or the Model API down on stage? <b>Just type.</b> Typed input runs through the
+        exact same checker and receipts as voice — nothing is bypassed, and it is never shown
+        as a voice transcript.
+      </div>
+      <div id="convo" class="convo"></div>
+      <div id="daemonSlot" class="daemon-slot" hidden>
+        <div class="dlabel">⬦ DAEMON · above the checker bar</div>
+        <div class="dtext" id="daemonText"></div>
+        <button id="daemonDismiss">Dismiss (silence for this session)</button>
+      </div>
+      <div class="inputrow">
+        <input id="msg" type="text" autocomplete="off"
+               placeholder="e.g. can I detect at Tybee Island?">
+        <button id="send" class="primary">Send</button>
+      </div>
+    </section>
 
-  <div class="legend">
-    <span><i style="background:var(--allow)"></i>allow &mdash; ran &amp; receipted</span>
-    <span><i style="background:var(--stage)"></i>stage &mdash; held for a human</span>
-    <span><i style="background:var(--block)"></i>block &mdash; refused, never ran</span>
-    <span><i style="background:var(--plan)"></i>plan / voice</span>
+    <!-- ================= RECEIPTS ================= -->
+    <section class="pane">
+      <h2>Receipt chain &mdash; recompute it</h2>
+      <div class="controls">
+        <select id="chain"></select>
+        <button id="replay">▶ Replay</button>
+        <button id="verify">✓ Verify</button>
+        <button id="tamper" class="danger">⚡ Flip one byte</button>
+        <div id="badge" class="badge"><span class="dot"></span><span id="badge-text">not yet verified</span></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--allow)"></i>allow</span>
+        <span><i style="background:var(--stage)"></i>stage</span>
+        <span><i style="background:var(--block)"></i>block</span>
+        <span><i style="background:var(--plan)"></i>plan / voice</span>
+        <span><i style="background:var(--daemon)"></i>daemon</span>
+      </div>
+      <div id="chainView" class="chain"></div>
+    </section>
   </div>
-
-  <div id="chainView" class="chain"></div>
 
   <footer>
-    Served from <code>127.0.0.1</code> only &mdash; nothing leaves the laptop. Every receipt is a real
-    line from <code>runs/</code>; <b>Verify</b> runs the project&rsquo;s own <code>receipts/verify.py</code>,
-    recomputing every hash from genesis. <b>Flip one byte</b> changes one character of one receipt in a
-    throwaway copy &mdash; the real chain is never touched &mdash; and shows verification fail by name.
+    Served from <code>127.0.0.1</code> only &mdash; nothing leaves the laptop except the voice, which is
+    rendered by ElevenLabs and labeled as such. Every message goes through the same checker; every
+    receipt shown is a real line from a chain under <code>runs/</code>. <b>Verify</b> runs the project&rsquo;s
+    own <code>receipts/verify.py</code>; <b>Flip one byte</b> tampers a throwaway copy only.
   </footer>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
 const view = $('#chainView'), badge = $('#badge'), badgeText = $('#badge-text');
-let current = [];       // receipts for the loaded chain
+const convo = $('#convo'), daemonSlot = $('#daemonSlot'), daemonText = $('#daemonText');
+let current = [];               // receipts for the chain shown in the timeline
+let chatChainName = 'chat-live.jsonl';
 let replayTimer = null;
 
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+/* ---------- timeline (receipts) ---------- */
 function classify(a) {
   const t = a.type;
+  if (t === 'daemon_suggestion') {
+    const gv = (a.verdict && a.verdict.verdict) || '?';
+    return { tier: 'daemon', label: 'DAEMON', reason: 'gated: ' + gv + ' · NOT executed · dismissible' };
+  }
   const v = a.verdict && a.verdict.verdict;
   if (v) return { tier: v, label: v.toUpperCase(), reason: (a.verdict.reason || '') + (a.verdict.rule ? '  ·  rule: ' + a.verdict.rule : '') };
   if (t === 'detect_answer') {
     const d = (a.decision || '').toUpperCase();
-    if (d.indexOf('STAGED') >= 0) return { tier: 'stage', label: 'STAGED', reason: a.staging_reason || ('verdict=' + a.rule_verdict) };
-    if (d.indexOf('CAVEAT') >= 0) return { tier: 'stage', label: 'CAVEAT', reason: a.citation || a.staging_reason || '' };
-    if (d.indexOf('ANSWER') >= 0) return { tier: 'allow', label: 'ANSWERED', reason: (a.rule_verdict || '') + (a.citation ? '  ·  ' + a.citation : '') };
+    if (d.indexOf('STAGED') >= 0) return { tier: 'stage', label: 'STAGED', reason: a.staging_reason || '' };
+    if (d.indexOf('CAVEAT') >= 0) return { tier: 'stage', label: 'CAVEAT', reason: a.caveat || '' };
+    if (d.indexOf('ANSWER') >= 0) return { tier: 'allow', label: 'ANSWERED', reason: (a.rule_verdict || '') };
   }
   if (t === 'witness_observation') return a.verified
     ? { tier: 'allow', label: 'VERIFIED', reason: a.reason || '' }
@@ -155,8 +216,12 @@ function classify(a) {
   if (t === 'checklist_result') return a.ready_to_ship
     ? { tier: 'allow', label: 'READY TO SHIP', reason: 'every item verified' }
     : { tier: 'stage', label: 'NOT SHIPPED', reason: 'unverified: ' + ((a.unverified_items || []).join(', ') || '—') };
-  if (t === 'plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || '' };
+  if (t === 'daemon_dismissed') return { tier: 'neutral', label: 'DISMISSED', reason: 'silent for the session' };
+  if (t === 'voice_output') return { tier: 'plan', label: a.kind === 'daemon' ? 'DAEMON SPOKE' : 'SPOKE', reason: a.tts_engine ? 'voice: ' + a.tts_engine : 'text only' };
+  if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
   if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || '') };
+  if (t === 'plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || '' };
+  if (t === 'session_start') return { tier: 'neutral', label: 'SESSION', reason: '' };
   return { tier: 'neutral', label: (t || 'step').toUpperCase(), reason: a.reason || '' };
 }
 
@@ -166,93 +231,137 @@ function card(r, idx) {
   const el = document.createElement('div');
   el.className = 'receipt ' + c.tier;
   el.dataset.idx = idx;
-  const summary = a.summary || a.type || 'step';
   el.innerHTML =
-    '<div class="r-top">' +
-      '<span class="seq">#' + r.seq + '</span>' +
+    '<div class="r-top"><span class="seq">#' + r.seq + '</span>' +
       '<span class="pill ' + c.tier + '">' + c.label + '</span>' +
-      '<span class="r-type">' + (a.type || '') + (a.tool ? ' · ' + a.tool : '') + '</span>' +
-    '</div>' +
-    '<div class="summary">' + esc(summary) + '</div>' +
+      '<span class="r-type">' + esc((a.type || '') + (a.tool ? ' · ' + a.tool : '')) + '</span></div>' +
+    '<div class="summary">' + esc(a.summary || a.type || 'step') + '</div>' +
     (c.reason ? '<div class="reason">' + esc(c.reason) + '</div>' : '') +
     '<div class="hashes"><span><b>hash</b> ' + (r.hash || '').slice(0, 12) + '…</span>' +
       '<span><b>prev</b> ' + (r.prev || '').slice(0, 12) + '…</span></div>';
   return el;
 }
-function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
-function render(reveal) {
+function renderTimeline(reveal) {
   clearTimeout(replayTimer);
   view.innerHTML = '';
-  if (!current.length) {
-    view.innerHTML = '<div class="empty">No receipts in this chain yet. Generate one with ' +
-      '<code>python3 scripts/day1_acceptance.py</code> (no API key needed), then reload.</div>';
-    return;
-  }
+  if (!current.length) { view.innerHTML = '<div class="reason">empty chain</div>'; return; }
   const cards = current.map(card);
   cards.forEach(c => view.appendChild(c));
   if (reveal) {
     let i = 0;
-    const step = () => {
-      if (i >= cards.length) return;
-      cards[i].classList.add('show');
-      i++;
-      replayTimer = setTimeout(step, 650);
-    };
+    const step = () => { if (i >= cards.length) return; cards[i].classList.add('show'); i++; replayTimer = setTimeout(step, 550); };
     step();
-  } else {
-    cards.forEach(c => c.classList.add('show'));
-  }
+  } else { cards.forEach(c => c.classList.add('show')); view.scrollTop = view.scrollHeight; }
 }
 
-function setBadge(state, text) {
-  badge.className = 'badge' + (state ? ' ' + state : '');
-  badgeText.textContent = text;
-}
+function setBadge(state, text) { badge.className = 'badge' + (state ? ' ' + state : ''); badgeText.textContent = text; }
 
 async function loadChains() {
   const sel = $('#chain');
   const r = await fetch('/api/chains').then(x => x.json());
   sel.innerHTML = '';
-  r.chains.forEach(c => {
-    const o = document.createElement('option');
-    o.value = c.name;
-    o.textContent = c.name + '  (' + c.count + ')';
-    sel.appendChild(o);
-  });
-  // Default to the gated-loop chain if present — it shows allow + stage + block in one turn.
-  const pref = r.chains.find(c => c.name.indexOf('gated-loop') >= 0);
+  r.chains.forEach(c => { const o = document.createElement('option'); o.value = c.name; o.textContent = c.name + '  (' + c.count + ')'; sel.appendChild(o); });
+  const pref = r.chains.find(c => c.name === chatChainName) || r.chains.find(c => c.name.indexOf('gated-loop') >= 0);
   if (pref) sel.value = pref.name;
   await loadChain(sel.value);
 }
 
 async function loadChain(name) {
-  if (!name) { current = []; render(false); return; }
+  if (!name) { current = []; renderTimeline(false); return; }
   const r = await fetch('/api/chain?name=' + encodeURIComponent(name)).then(x => x.json());
   current = r.receipts || [];
   setBadge('', 'not yet verified');
-  render(false);
+  renderTimeline(false);
 }
 
+/* ---------- chat (reads the real chat chain) ---------- */
+function addBubble(who, meta, text, audioPath) {
+  const b = document.createElement('div');
+  b.className = 'bubble ' + (who === 'you' ? 'you' : 'andy');
+  let head = '<div class="who">' + esc(who === 'you' ? 'you' : 'Andy') + (meta ? ' · ' + esc(meta) : '');
+  if (audioPath) head += ' <button class="play" data-audio="' + esc(audioPath) + '">🔊 replay</button>';
+  head += '</div>';
+  b.innerHTML = head + '<div>' + esc(text || '') + '</div>';
+  convo.appendChild(b);
+}
+
+async function refreshChat() {
+  const r = await fetch('/api/chain?name=' + encodeURIComponent(chatChainName)).then(x => x.json());
+  const receipts = r.receipts || [];
+  convo.innerHTML = '';
+  let any = false;
+  for (const rc of receipts) {
+    const a = rc.action || {};
+    if (a.type === 'chat_input') { addBubble('you', 'typed', a.text); any = true; }
+    else if (a.type === 'voice_input') { addBubble('you', 'transcript · ' + (a.source || ''), a.transcript); any = true; }
+    else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', '', a.text, a.audio_path); any = true; }
+  }
+  if (!any) convo.innerHTML = '<div class="empty">Say something — try “can I detect at Myrtle Beach?” then “…at Tybee Island?”</div>';
+  convo.scrollTop = convo.scrollHeight;
+  updateDaemon(receipts);
+}
+
+function updateDaemon(receipts) {
+  let sug = null, dismissedAt = -1;
+  receipts.forEach((rc, i) => { const a = rc.action || {};
+    if (a.type === 'daemon_suggestion') sug = { text: a.spoken, i };
+    if (a.type === 'daemon_dismissed') dismissedAt = i;
+  });
+  if (sug && sug.i > dismissedAt) { daemonText.textContent = sug.text; daemonSlot.hidden = false; }
+  else daemonSlot.hidden = true;
+}
+
+function playAudio(path) { try { new Audio('/audio?path=' + encodeURIComponent(path)).play().catch(() => {}); } catch (e) {} }
+
+async function send() {
+  const input = $('#msg'), btn = $('#send');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = ''; input.disabled = true; btn.disabled = true;
+  addBubble('you', 'typed', msg);                 // optimistic echo; replaced by refreshChat
+  try {
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }) }).then(x => x.json());
+    if (!res.error) {
+      chatChainName = res.chain_name || chatChainName;
+      await refreshChat();
+      // Timeline follows the conversation.
+      const sel = $('#chain');
+      if (![...sel.options].some(o => o.value === chatChainName)) await loadChains();
+      sel.value = chatChainName;
+      await loadChain(chatChainName);
+      if (res.audio_path) playAudio(res.audio_path);
+    }
+  } finally { input.disabled = false; btn.disabled = false; input.focus(); }
+}
+
+/* ---------- wiring ---------- */
+$('#send').addEventListener('click', send);
+$('#msg').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+convo.addEventListener('click', e => { const b = e.target.closest('.play'); if (b) playAudio(b.dataset.audio); });
+$('#daemonDismiss').addEventListener('click', async () => {
+  await fetch('/api/daemon-dismiss', { method: 'POST', body: '{}' }).then(x => x.json());
+  daemonSlot.hidden = true;
+  await refreshChat(); await loadChain($('#chain').value);
+});
 $('#chain').addEventListener('change', e => loadChain(e.target.value));
-$('#replay').addEventListener('click', () => { setBadge('', 'replaying…'); render(true); });
+$('#replay').addEventListener('click', () => { setBadge('', 'replaying…'); renderTimeline(true); });
 $('#verify').addEventListener('click', async () => {
-  const name = $('#chain').value;
   setBadge('', 'verifying…');
-  const r = await fetch('/api/verify?name=' + encodeURIComponent(name)).then(x => x.json());
+  const r = await fetch('/api/verify?name=' + encodeURIComponent($('#chain').value)).then(x => x.json());
   setBadge(r.ok ? 'ok' : 'fail', (r.ok ? '✓ ' : '✗ ') + r.reason);
 });
 $('#tamper').addEventListener('click', async () => {
-  const name = $('#chain').value;
-  const r = await fetch('/api/tamper?name=' + encodeURIComponent(name)).then(x => x.json());
+  const r = await fetch('/api/tamper?name=' + encodeURIComponent($('#chain').value)).then(x => x.json());
   setBadge(r.ok ? 'ok' : 'fail', (r.ok ? '✓ ' : '✗ ') + r.reason);
-  // Mark the receipt whose byte was flipped.
   view.querySelectorAll('.receipt.tampered').forEach(e => e.classList.remove('tampered'));
   const el = view.querySelector('.receipt[data-idx="' + r.receipt_index + '"]');
   if (el) { el.classList.add('tampered'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 });
 
 loadChains();
+refreshChat();
 </script>
 </body>
 </html>

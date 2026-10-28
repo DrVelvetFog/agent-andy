@@ -30,10 +30,11 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from . import detect, loop, tts, witness
+from . import checker, detect, loop, tts, witness
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
+TYPED = "typed"            # a message the owner typed — never a voice transcription
 TRANSCRIBE_MODEL = "muse-voice-transcribe-1.0"
 BASE_URL = "https://api.meta.ai/v1"
 
@@ -92,7 +93,8 @@ def route(transcript: str) -> tuple[str, str | None]:
 
 
 def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
-          voice_id: str | None = None, model_id: str | None = None) -> dict:
+          voice_id: str | None = None, model_id: str | None = None,
+          kind: str = "reply") -> dict:
     """Voice-OUT: show the text AND render it to speech with ElevenLabs. Text is
     always returned; the voice is best-effort — if the key is missing or the call
     fails, Andy falls back to text and says so, never faking a voice. When a chain
@@ -122,6 +124,7 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
             "type": "voice_output",
             "summary": f"spoke: {text[:70]}",
             "text": text,
+            "kind": kind,              # "reply" (Andy answering) or "daemon" (the proactive beat)
             "tts_engine": result["tts_engine"],
             "tts_model": result.get("model_id"),
             "voice_id": result.get("voice_id"),
@@ -215,3 +218,64 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     outcomes = loop.run_turn(chain, transcript)  # the existing Spark plan + gated loop
     return {"intent": "general", "source": source, "result": outcomes,
             "reply": speak("Done.", chain, voice=voice)}
+
+
+def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
+              play: bool = False, run_general: bool = True, strict: bool = False) -> dict:
+    """One TYPED chat message through the SAME gate as spoken input.
+
+    The input is receipted as `chat_input` with source `typed` — never dressed up
+    as a voice transcription. It routes exactly like a spoken request: detect
+    (Form 2) or witness, or, for anything else, the policy engine rules on the raw
+    request directly — an off-scope message (exfiltration, money, a secret field,
+    about a person) is BLOCKED, receipted, and never run; an allowed one goes to
+    the Spark loop. Nothing reaches a tool without a receipt in front of it. A
+    daemon, if given, may then surface ONE suggestion after a staged result.
+    """
+    if daemon is not None:
+        daemon.new_task()
+    chain.append({
+        "type": "chat_input",
+        "summary": f"typed: {message[:80]}",
+        "text": message,
+        "source": TYPED,            # typed, NOT a voice transcription
+    })
+
+    intent, arg = route(message)
+    daemon_src = None
+    if intent == "detect":
+        res = detect.answer(chain, arg, strict=strict)
+        reply_text = _detect_reply(res["outcome"])
+        daemon_src = res
+        payload = {"intent": "detect", "place": arg, "result": res}
+    elif intent == "witness":
+        items = _default_photos()
+        results = [witness.observe_and_verify(chain, it, cc, p) for it, cc, p in items]
+        fin = witness.finalize(chain, results)
+        reply_text = ("Box ready to ship." if fin["ready_to_ship"]
+                      else f"Not shipped — unverified: {', '.join(fin['unverified_items'])}.")
+        payload = {"intent": "witness", "result": fin}
+    else:
+        action = {"type": "tool", "tool": "chat_request", "summary": message}
+        verdict = checker.evaluate(action)
+        chain.append({**action, "verdict": verdict, "executed": False})
+        if verdict["verdict"] != checker.ALLOW:
+            reply_text = (f"I won't do that — {verdict['reason']} "
+                          f"({verdict['verdict']}, rule: {verdict['rule']}).")
+            payload = {"intent": "general", "verdict": verdict, "executed": False}
+        elif run_general:
+            try:
+                outcomes = loop.run_turn(chain, message)   # allowed -> the gated Spark loop
+                reply_text = "Done."
+            except Exception as e:
+                outcomes = []
+                reply_text = (f"That's within policy, but I couldn't reach the planner "
+                              f"({type(e).__name__}). Try a detect or packing request.")
+            payload = {"intent": "general", "verdict": verdict, "outcomes": outcomes}
+        else:
+            reply_text = "That's within policy; no tool is wired for it in this mode."
+            payload = {"intent": "general", "verdict": verdict, "outcomes": []}
+
+    reply = speak(reply_text, chain, voice=voice, play=play)
+    daemon_info = daemon.observe(chain, daemon_src, voice_mode=voice) if daemon is not None else None
+    return {**payload, "source": TYPED, "reply_text": reply_text, "reply": reply, "daemon": daemon_info}
