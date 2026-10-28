@@ -92,10 +92,19 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True) -> d
         "tts_engine": reply.get("tts_engine"),
         "daemon": daemon_out,                     # only present if the daemon really spoke
         "daemon_available": _DAEMON_AVAILABLE,
+        "pending": CHAT["store"].pending_list(),  # verify proposals awaiting an Approve/Decline
         "chain_name": CHAT["chain_name"],
         "receipts": chain.receipts(),
         "verify": {"ok": ok, "reason": reason},
     }
+
+
+def pending_list() -> dict:
+    """Current verify proposals awaiting the owner's decision (for the page to
+    render Approve/Decline buttons). Empty when nothing is pending."""
+    if CHAT["store"] is None:
+        init_chat()
+    return {"pending": CHAT["store"].pending_list()}
 
 
 def daemon_dismiss() -> dict:
@@ -226,6 +235,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": ok, "reason": reason})
         elif u.path == "/api/tamper":
             self._json(tamper((q.get("name") or [""])[0]))
+        elif u.path == "/api/pending":
+            self._json(pending_list())
         elif u.path == "/audio":
             self._serve_audio((q.get("path") or [""])[0])
         else:

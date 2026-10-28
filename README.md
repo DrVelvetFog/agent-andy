@@ -133,7 +133,11 @@ your approval), so the knowledge base grows only by proof you can replay. Earned
 answers live for the **current session only** — they do not persist to a new run.
 Verify-on-demand also fetches only URLs that are already in the site index; any
 other URL is refused without a fetch, so the one bit of web Andy touches is the
-index it already holds.
+index it already holds. In the chat pane, a pending proposal shows its full
+evidence (verdict, verbatim quote, source, date, page URL, and the caveat) with
+**Approve** and **Decline** buttons — approving is the same receipted action as
+typing "approve," declining leaves the place staged, and the buttons appear only
+while a proposal is actually pending.
 
 ## Try the verify-on-demand test
 

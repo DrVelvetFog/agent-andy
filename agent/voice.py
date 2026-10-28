@@ -81,6 +81,7 @@ _WITNESS_RE = re.compile(r"\b(witness|packing list|packing-list|pack(?:ed)?\s+(?
 # verify-on-demand: "verify it" / "verify <place>", and the owner's approval
 _VERIFY_RE = re.compile(r"\bverif(?:y|ies|ied)\b", re.IGNORECASE)
 _APPROVE_RE = re.compile(r"^\s*(?:yes|approve|confirm)\b", re.IGNORECASE)
+_DECLINE_RE = re.compile(r"\b(?:declin(?:e|ed|es)|reject(?:ed|s)?)\b", re.IGNORECASE)
 
 
 def route(transcript: str) -> tuple[str, str | None]:
@@ -91,6 +92,10 @@ def route(transcript: str) -> tuple[str, str | None]:
         m = re.search(r"(?:approve|confirm)\s+(.*)", t, re.IGNORECASE)
         arg = m.group(1).strip().rstrip("?.! ") if m and m.group(1).strip() else None
         return "approve", arg
+    if _DECLINE_RE.search(t):
+        m = re.search(r"(?:decline|reject)\s+(.*)", t, re.IGNORECASE)
+        arg = m.group(1).strip().rstrip("?.! ") if m and m.group(1).strip() else None
+        return "decline", arg
     if _VERIFY_RE.search(t):
         m = re.search(r"verif(?:y|ies|ied)\s+(?:detecting\s+(?:at|in|on)\s+)?(.*)", t, re.IGNORECASE)
         arg = m.group(1).strip().rstrip("?.! ") if m else ""
@@ -301,9 +306,20 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         else:
             res = store.confirm(chain, arg)
             reply_text = (f"Approved — {res['place']} is now a confirmed secondary answer for this "
-                          "session; ask me again and I'll answer it, labeled secondary."
+                          "session (I read the site, not the ordinance — confirm the primary). Ask me "
+                          "again and I'll answer it, labeled secondary."
                           if res["ok"] else f"Nothing to approve — {res['error']}.")
         payload = {"intent": "approve", "result": res}
+    elif intent == "decline":
+        if store is None:
+            reply_text = "Declining isn't available in this mode."
+            res = {"ok": False}
+        else:
+            res = store.decline(chain, arg)
+            reply_text = (f"Declined — {res['place']} stays staged, not answered; you can verify it "
+                          "again later with a fresh fetch."
+                          if res["ok"] else f"Nothing to decline — {res['error']}.")
+        payload = {"intent": "decline", "result": res}
     elif intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
         reply_text = _detect_reply(res["outcome"])

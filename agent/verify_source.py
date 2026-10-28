@@ -80,6 +80,13 @@ def _norm(s) -> str:
     return " ".join(str(s).lower().split()).strip(" .,?!")
 
 
+def _pending_caveat(source: str) -> str:
+    """The caveat shown on a PENDING proposal (pre-approval), so the owner sees
+    exactly what approving would mean."""
+    return (f"Secondary source — Andy read the site page, not the primary ordinance ({source}); "
+            "confirm the primary before relying on it.")
+
+
 def _confirmed_outcome(p: dict) -> dict:
     """The detect-style outcome a confirmed-secondary place answers with — an answer
     WITH A CAVEAT: a secondary source that names a primary, owner-approved."""
@@ -113,6 +120,30 @@ class KnowledgeStore:
 
     def note_candidate(self, place: str, url: str) -> None:
         self.last_candidate = (place, url)
+
+    def pending_list(self) -> list[dict]:
+        """The proposals awaiting the owner's decision, each with ALL of its
+        evidence — so the UI can show it before any Approve button, never a blind
+        approval. This is a read of session state, not a new trust surface."""
+        return [{"place": p["place"], "url": p["url"], "verdict": p["verdict"],
+                 "quote": p["quote"], "source": p["source"],
+                 "verified_date": p["verified_date"], "caveat": _pending_caveat(p["source"])}
+                for p in self.pending.values()]
+
+    def decline(self, chain, place: str | None = None) -> dict:
+        """The owner declines a pending proposal. Receipted; clears ONLY that
+        proposal and leaves the place staged, never answered. It can be verified
+        again later with a fresh fetch."""
+        key = _norm(place) if place else (next(iter(self.pending)) if len(self.pending) == 1 else None)
+        if key is None or key not in self.pending:
+            return {"ok": False, "error": "nothing pending to decline"}
+        p = self.pending.pop(key)
+        chain.append({"type": "verify_decline",
+                      "summary": f"owner declined {p['place']} — still staged, not answered",
+                      "place": p["place"], "url": p["url"], "verdict": p["verdict"],
+                      "source": p["source"], "declined_by": "owner",
+                      "declined_on": time.strftime("%Y-%m-%d", time.gmtime())})
+        return {"ok": True, "place": p["place"]}
 
     def propose(self, chain, place: str | None = None, url: str | None = None) -> dict:
         """Fetch + extract a candidate page, receipt both steps, and hold a pending
