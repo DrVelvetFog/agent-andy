@@ -5,3 +5,5 @@ runs/
 .DS_Store
 # Local secrets written by `elevenlabs onboard`
 /.env.local
+# Generated Mac app launcher bundle (built by scripts/build_mac_app.sh)
+/AgentAndy.app/

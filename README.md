@@ -238,6 +238,46 @@ financial / secret-field / system / off-task (including "ignore your rules" /
 "pretend you are not gated") / destructive → the **deterministic policy engine**,
 locally, no model; the witness attack → **fail-closed with no photos**, no SAM.
 
+## Mac app (optional launcher)
+
+A convenience launcher for the local viewer — nothing more. `AgentAndy.app` is a
+tiny shim that runs this repo's own `./start-andy.sh`; it is **not a new Andy, not
+a cloud service, and not a change to the gate, receipts, or checker.** The terminal
+`./start-andy.sh` stays the canonical launcher. The `.app` is generated output and
+is not committed — what's committed is the build script, the `Info.plist` template,
+and the launcher it bundles.
+
+**Build it (on a Mac):**
+
+```bash
+bash scripts/build_mac_app.sh
+```
+
+This writes `AgentAndy.app` to the repo root with a locally-drawn checkmark icon
+(`scripts/make_app_icon.py` — no downloaded or stock image; if the icon can't be
+built locally it ships plain and says so).
+
+**Run it:** drag `AgentAndy.app` to the Dock, then double-click it. It starts the
+viewer on `127.0.0.1:8799` and opens that page in your default browser. **Keep the
+`.app` inside this repo** — it is bound to this checkout; the Dock holds a reference,
+so it keeps working from the Dock while the file stays in the repo.
+
+**Quit it:** quit the app (⌘Q, or right-click its Dock icon → Quit). That stops the
+server it started and frees the port. Launching it again while it is already running
+does not start a second server — it just opens the existing page.
+
+**Remove it:** delete `AgentAndy.app`. Nothing else is installed anywhere.
+
+**What it is not.** The `.app` is **unsigned** and **not notarized**; it is **not an
+installer** — there is no `.dmg`, no `.pkg`, and it is not distributed anywhere. It
+does not update itself and copies no files around your machine. It needs no
+permission beyond the `127.0.0.1` the viewer already uses — no camera, microphone,
+files, or other access. On first launch macOS may warn that it is from an
+unidentified developer (because it is unsigned); right-click the app and choose
+**Open** to run it. If the `.app` is ever moved out of the repo it refuses to run —
+naming the missing `start-andy.sh` — rather than launch a stray copy of Andy, and
+it downloads nothing.
+
 ## Try to break it (acceptance)
 
 ```bash

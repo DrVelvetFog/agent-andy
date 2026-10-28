@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist template for AgentAndy.app. scripts/build_mac_app.sh copies this
+     into the generated bundle and substitutes __VERSION__. The .app is an
+     unsigned local launcher: no entitlements, no sandbox claim, no camera /
+     microphone / location / files usage descriptions, no network entitlement
+     beyond the localhost the viewer already uses. The CFBundleIconFile key is
+     added by the build script only when a local .icns was built. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>AgentAndy</string>
+  <key>CFBundleDisplayName</key>
+  <string>Agent Andy</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.uigstudios.agentandy.launcher</string>
+  <key>CFBundleVersion</key>
+  <string>__VERSION__</string>
+  <key>CFBundleShortVersionString</key>
+  <string>__VERSION__</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>AgentAndy</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>

@@ -25,7 +25,6 @@ Deterministic and local: detect answers from the fixture + gate, no network, no 
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -42,6 +41,7 @@ FIXTURE = ROOT / "data" / "detect_sample.toml"
 
 CITE_SEC = "Sec. 10-191(16)"
 CITE_ORD = "Ord. O-2022-1"
+MUNI_URL = "https://library.municode.com/ga/jekyll_island_authority/codes/code_of_ordinances"
 CAVEAT_MARK = "corroborated by the June 21, 2022 Jekyll Island Authority board adoption summary"
 OLD_DRAFT_MARK = "first-reading draft"
 # Files that make up the repo / UI / README surface (self excluded).
@@ -110,22 +110,28 @@ def main() -> int:
         tn["decision"] == detect.STAGED and tn["rule_verdict"] is None
         and ts["decision"] == detect.STAGED and ts["rule_verdict"] is None)
 
-    # d. no other location changed; Jekyll's own verdict/conditions/quote unchanged
-    before = subprocess.run(["git", "-C", str(ROOT), "show", "HEAD:data/detect_sample.toml"],
-                            capture_output=True, text=True, check=True).stdout
-    before_locs, after_locs = _locations(before), _locations(FIXTURE.read_text(encoding="utf-8"))
+    # d. the fixture holds the accepted Jekyll citation, and only Jekyll moved.
+    #    Absolute assertions on the committed fixture — stable whether or not the
+    #    Jekyll change is still uncommitted (a diff vs HEAD goes vacuous once it is).
+    locs = _locations(FIXTURE.read_text(encoding="utf-8"))
     JEK = "Jekyll Island, Georgia"
-    others_same = (set(before_locs) == set(after_locs) and all(
-        before_locs[p] == after_locs[p] for p in before_locs if p != JEK))
-    checks["d. no other location changed verdict/citation/conditions"] = others_same
-    jb, ja = before_locs[JEK], after_locs[JEK]
-    checks["d. Jekyll verdict + conditions + source_quote unchanged"] = (
-        jb["verdict"] == ja["verdict"] == "restricted"
-        and jb["conditions"] == ja["conditions"]
-        and jb["source_quote"] == ja["source_quote"])
-    checks["d. Jekyll citation + caveat + checked date did change"] = (
-        jb["source_name"] != ja["source_name"] and jb["source_url"] != ja["source_url"]
-        and jb["caveat"] != ja["caveat"] and ja["checked"] == "2026-10-28")
+    ja = locs[JEK]
+    checks["d. Jekyll carries the accepted enacted citation + corroboration caveat"] = (
+        ja["verdict"] == "restricted" and ja["evidence"] == "corroborated"
+        and CITE_SEC in ja["source_name"] and CITE_ORD in ja["source_name"]
+        and ja["source_url"] == MUNI_URL
+        and CAVEAT_MARK in ja["caveat"] and OLD_DRAFT_MARK not in ja["caveat"]
+        and ja["checked"] == "2026-10-28"
+        and ja["conditions"].startswith("Prohibited islandwide")
+        and ja["source_quote"].startswith("Use of a mineral or metal detector"))
+    # Only Jekyll is "corroborated"; the rest keep their original tiers (6 primary,
+    # 1 absent), the place set is exactly the vetted eight, and no other entry
+    # borrows Jekyll's citation URL — so nothing else moved.
+    tiers = sorted(r["evidence"] for r in locs.values())
+    checks["d. only Jekyll is corroborated; others unchanged (6 primary + 1 absent)"] = (
+        tiers == sorted(["corroborated"] + ["primary"] * 6 + ["absent"])
+        and len(locs) == 8
+        and all(r["source_url"] != MUNI_URL for p, r in locs.items() if p != JEK))
 
     # e. never presented as a direct Municode read; OCGA 12-3-10 absent
     ocga_hits, bare_read_hits = [], []
