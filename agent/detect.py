@@ -25,9 +25,14 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from . import checker
+from . import checker, tier2
 
 SAMPLE_FILE = Path(__file__).resolve().parent.parent / "data" / "detect_sample.toml"
+
+# Tier 2 (the sitemap-derived index) can only add a candidate to a STAGE. When it
+# does, this is the reason that lands in the receipt — plainly NOT a verdict.
+TIER2_REASON = ("site-index candidate found; primary source not independently "
+                "verified — a human must check the primary before any verdict.")
 
 ANSWERED, ANSWERED_WITH_CAVEAT, STAGED = "answered", "answered_with_caveat", "staged"
 
@@ -56,6 +61,16 @@ def _load_index() -> dict[str, dict]:
 def lookup(place: str) -> dict | None:
     """Exact (normalized) alias match only — no fuzzy or nearby inference."""
     return _load_index().get(_norm(place))
+
+
+def _split_place_state(place: str) -> tuple[str, str | None]:
+    """A trailing ', <state>' is used only to filter Tier 2 candidates; the Tier 1
+    lookup still uses the whole string. 'Daytona Beach, Florida' -> ('Daytona Beach',
+    'Florida'); 'Tybee Island' -> ('Tybee Island', None)."""
+    if "," in place:
+        name, _, st = place.partition(",")
+        return name.strip(), (st.strip() or None)
+    return place, None
 
 
 def _citation(rec: dict) -> dict | None:
@@ -136,6 +151,18 @@ def answer(chain, place: str, strict: bool = False) -> dict:
                 "outcome": None, "decision": STAGED}
 
     out = evaluate_query(place, strict=strict)
+
+    # Tier 2 sits BEHIND Tier 1: it can only add a candidate to a STAGE, and never
+    # changes an answer. A Tier 1 match that answers gets no Tier 2 lookup at all.
+    out["tier2_candidates"] = []
+    out["tier2_reason"] = None
+    if out["decision"] == STAGED:
+        name, st = _split_place_state(place)
+        cands = tier2.candidates(name, st)
+        if cands:
+            out["tier2_candidates"] = cands
+            out["tier2_reason"] = TIER2_REASON
+
     answer_receipt = chain.append({
         "type": "detect_answer",
         "summary": f"{out['decision']}: {out['place'] or place} — "
@@ -149,6 +176,8 @@ def answer(chain, place: str, strict: bool = False) -> dict:
         "conditions": out["conditions"],
         "caveat": out["caveat"],
         "staging_reason": out["staging_reason"],
+        "tier2_candidates": out["tier2_candidates"],  # index candidates — NOT verdicts
+        "tier2_reason": out["tier2_reason"],
     })
     return {"scope_receipt": scope_receipt, "answer_receipt": answer_receipt,
             "outcome": out, "decision": out["decision"]}

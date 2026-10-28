@@ -206,7 +206,13 @@ function classify(a) {
   if (v) return { tier: v, label: v.toUpperCase(), reason: (a.verdict.reason || '') + (a.verdict.rule ? '  ·  rule: ' + a.verdict.rule : '') };
   if (t === 'detect_answer') {
     const d = (a.decision || '').toUpperCase();
-    if (d.indexOf('STAGED') >= 0) return { tier: 'stage', label: 'STAGED', reason: a.staging_reason || '' };
+    if (d.indexOf('STAGED') >= 0) {
+      let reason = a.staging_reason || '';
+      const cands = a.tier2_candidates || [];
+      if (cands.length) reason += ' · site-index candidate (unverified): ' + cands[0].url +
+        (cands.length > 1 ? ' (+' + (cands.length - 1) + ' more)' : '');
+      return { tier: 'stage', label: 'STAGED', reason: reason };
+    }
     if (d.indexOf('CAVEAT') >= 0) return { tier: 'stage', label: 'CAVEAT', reason: a.caveat || '' };
     if (d.indexOf('ANSWER') >= 0) return { tier: 'allow', label: 'ANSWERED', reason: (a.rule_verdict || '') };
   }

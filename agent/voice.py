@@ -177,7 +177,18 @@ def _detect_reply(o: dict) -> str:
         if o.get("caveat"):
             parts.append(f"Caveat: {o['caveat']}")
         return " ".join(parts)
-    return f"I'm staging that one as unverified — {o['staging_reason']}"
+    reply = f"I'm staging that one as unverified — {o['staging_reason']}"
+    cands = o.get("tier2_candidates") or []
+    if cands:
+        c = cands[0]
+        where = c["label"] + (f", {c['state_from_path']}" if c.get("state_from_path") else "")
+        reply += (f" There's a site-index candidate to check — {where} ({c['url']}), "
+                  "a page label derived from the site's URL only, primary source not "
+                  "verified; a human must check it before any verdict.")
+        extra = len(cands) - 1
+        if extra:
+            reply += f" (+{extra} more candidate{'s' if extra != 1 else ''}.)"
+    return reply
 
 
 def handle(chain, transcript: str, source: str, photos=None, strict: bool = False,

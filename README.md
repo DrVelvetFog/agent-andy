@@ -79,6 +79,17 @@ caveat and stages under strict mode, and Tybee — claimed allowed by forums but
 with no primary rule found — stages as unverified. A staged answer is the point:
 it proves Andy held back instead of guessing. No network, no model.
 
+**Two tiers, and only one of them answers.** *Tier 1* is the vetted sample above
+(`data/detect_sample.toml`): a match answers with its cited primary, or stages.
+*Tier 2* is a date-stamped index of the public site's location pages, built from
+`wheretodetect.org/sitemap.xml` by `scripts/build_site_index.py` into
+`data/site_index.json`. Tier 2 holds **no verdicts and no citations** — only a
+page URL and a label and state taken from the URL path, marked unverified. It
+never answers: for a staged question it can offer a *candidate site page* to go
+check, and the reply says plainly that the primary source is unverified and a
+human must confirm it before any verdict. It is **not** a verified location
+database, and **not** a claim about how many locations the site covers.
+
 ## Try the voice test
 
 ```bash
@@ -238,6 +249,16 @@ so it runs offline.
   renders only real suggestions, with a Dismiss button. A one-line launcher,
   `./start-andy.sh`, starts the server, opens the page, and prints the typed-chat
   fallback. `viewer/andy_viewer.py`, `viewer/index.html`, `scripts/chat_acceptance.py`.
+- **Oct 28 (hybrid knowledge base):** detect gains a second tier behind the vetted
+  eight. **Tier 1** is unchanged and still the only thing that answers. **Tier 2**
+  (`agent/tier2.py` over `data/site_index.json`, built by
+  `scripts/build_site_index.py` from the public sitemap, date- and URL-count-
+  stamped) is index-only — no verdicts, no citations, labels and state from the URL
+  path only. It sits behind Tier 1 and can only add a *candidate site page* to a
+  **stage**, never turning a stage into an answer: Tybee stages with a candidate to
+  check; a place in the index but not Tier 1 stages with its candidate URL and the
+  unverified-primary reason; a place in neither tier, or a fictional one, stages
+  with no candidate and no invented URL. `scripts/detect_acceptance.py` (two-tier).
 
 ## Prior inspiration — not claimed as hackathon work
 

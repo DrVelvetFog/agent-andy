@@ -1,0 +1,953 @@
+{
+  "source": "https://wheretodetect.org/sitemap.xml",
+  "fetched": "2026-10-28",
+  "url_count": 207,
+  "note": "Derived from the public sitemap. A list of the site's location pages (metal-detecting/<state>/<location>); the remaining sitemap URLs are law / club / guide / contact pages. This is NOT a verified location count and NOT a verdict or citation database. The label and state are derived from the URL PATH ONLY and are UNVERIFIED — a human must check the primary source before any verdict.",
+  "entries": [
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/panama-city-beach/",
+      "label": "Panama City Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/destin-south-walton/",
+      "label": "Destin South Walton",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/emerald-coast/",
+      "label": "Emerald Coast",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/gulf-islands-national-seashore/",
+      "label": "Gulf Islands National Seashore",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/amelia-island/",
+      "label": "Amelia Island",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/jacksonville-beach/",
+      "label": "Jacksonville Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/st-augustine-ponte-vedra/",
+      "label": "St Augustine Ponte Vedra",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/anastasia-state-park/",
+      "label": "Anastasia State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-matanzas/",
+      "label": "Fort Matanzas",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/flagler-county-beaches/",
+      "label": "Flagler County Beaches",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/daytona-beach/",
+      "label": "Daytona Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/new-smyrna-beach/",
+      "label": "New Smyrna Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/canaveral-national-seashore/",
+      "label": "Canaveral National Seashore",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/cocoa-beach/",
+      "label": "Cocoa Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/melbourne-beach/",
+      "label": "Melbourne Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/sebastian-inlet-state-park/",
+      "label": "Sebastian Inlet State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/wabasso-beach/",
+      "label": "Wabasso Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/vero-beach/",
+      "label": "Vero Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-pierce/",
+      "label": "Fort Pierce",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/stuart-martin-county/",
+      "label": "Stuart Martin County",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/palm-beach-county/",
+      "label": "Palm Beach County",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-lauderdale-broward/",
+      "label": "Fort Lauderdale Broward",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/miami-beach/",
+      "label": "Miami Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/everglades-national-park/",
+      "label": "Everglades National Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/florida-keys/",
+      "label": "Florida Keys",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/naples-marco-island/",
+      "label": "Naples Marco Island",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-myers-lee-county/",
+      "label": "Fort Myers Lee County",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/englewood-beach/",
+      "label": "Englewood Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/sarasota-county-beaches/",
+      "label": "Sarasota County Beaches",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/anna-maria-island/",
+      "label": "Anna Maria Island",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/clearwater-beach/",
+      "label": "Clearwater Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/st-petersburg/",
+      "label": "St Petersburg",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/crystal-river/",
+      "label": "Crystal River",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/ocala-marion-county/",
+      "label": "Ocala Marion County",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/orange-county-orlando/",
+      "label": "Orange County Orlando",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/perdido-key/",
+      "label": "Perdido Key",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/navarre-beach/",
+      "label": "Navarre Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/grayton-beach-state-park/",
+      "label": "Grayton Beach State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/st-andrews-state-park/",
+      "label": "St Andrews State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/mexico-beach/",
+      "label": "Mexico Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/st-joseph-peninsula-state-park/",
+      "label": "St Joseph Peninsula State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/st-george-island-state-park/",
+      "label": "St George Island State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-clinch-state-park/",
+      "label": "Fort Clinch State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/little-talbot-island-state-park/",
+      "label": "Little Talbot Island State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/huguenot-memorial-park/",
+      "label": "Huguenot Memorial Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/kathryn-abbey-hanna-park/",
+      "label": "Kathryn Abbey Hanna Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/gamble-rogers-state-recreation-area/",
+      "label": "Gamble Rogers State Recreation Area",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/ormond-beach/",
+      "label": "Ormond Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/volusia-county-parks/",
+      "label": "Volusia County Parks",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/satellite-beach-indialantic/",
+      "label": "Satellite Beach Indialantic",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-pierce-inlet-state-park/",
+      "label": "Fort Pierce Inlet State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/hutchinson-island-st-lucie-county/",
+      "label": "Hutchinson Island St Lucie County",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/jupiter-juno-beach-carlin-park/",
+      "label": "Jupiter Juno Beach Carlin Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/john-d-macarthur-beach-state-park/",
+      "label": "John D Macarthur Beach State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/boca-raton-city-beaches/",
+      "label": "Boca Raton City Beaches",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/delray-beach/",
+      "label": "Delray Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/hollywood-beach/",
+      "label": "Hollywood Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/bahia-honda-state-park/",
+      "label": "Bahia Honda State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/key-west-smathers-beach/",
+      "label": "Key West Smathers Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/dry-tortugas-national-park/",
+      "label": "Dry Tortugas National Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/biscayne-national-park/",
+      "label": "Biscayne National Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/fort-de-soto-park/",
+      "label": "Fort De Soto Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/pinellas-county-parks/",
+      "label": "Pinellas County Parks",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/honeymoon-island-state-park/",
+      "label": "Honeymoon Island State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/caladesi-island-state-park/",
+      "label": "Caladesi Island State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/hillsborough-county-parks/",
+      "label": "Hillsborough County Parks",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/tampa-city-parks-ben-t-davis-beach/",
+      "label": "Tampa City Parks Ben T Davis Beach",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/lovers-key-state-park/",
+      "label": "Lovers Key State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/delnor-wiggins-pass-state-park/",
+      "label": "Delnor Wiggins Pass State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/cayo-costa-state-park/",
+      "label": "Cayo Costa State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/gasparilla-island-state-park/",
+      "label": "Gasparilla Island State Park",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/cedar-key/",
+      "label": "Cedar Key",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/panhandle/",
+      "label": "Panhandle",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/first-coast/",
+      "label": "First Coast",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/space-coast-daytona/",
+      "label": "Space Coast Daytona",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/treasure-coast/",
+      "label": "Treasure Coast",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/south-florida-keys/",
+      "label": "South Florida Keys",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/gulf-coast/",
+      "label": "Gulf Coast",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/florida/central-florida/",
+      "label": "Central Florida",
+      "state_from_path": "Florida"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/tybee-island/",
+      "label": "Tybee Island",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/jekyll-island/",
+      "label": "Jekyll Island",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/st-simons-island/",
+      "label": "St Simons Island",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/cumberland-island-national-seashore/",
+      "label": "Cumberland Island National Seashore",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/fort-pulaski-national-monument/",
+      "label": "Fort Pulaski National Monument",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/sapelo-island/",
+      "label": "Sapelo Island",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/skidaway-island-state-park/",
+      "label": "Skidaway Island State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/chattahoochee-river-nra/",
+      "label": "Chattahoochee River Nra",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/kennesaw-mountain-nbp/",
+      "label": "Kennesaw Mountain Nbp",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/lake-lanier/",
+      "label": "Lake Lanier",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/lake-allatoona/",
+      "label": "Lake Allatoona",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/sweetwater-creek-state-park/",
+      "label": "Sweetwater Creek State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/red-top-mountain-state-park/",
+      "label": "Red Top Mountain State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/stone-mountain-park/",
+      "label": "Stone Mountain Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/fulton-county-parks/",
+      "label": "Fulton County Parks",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/cobb-county-parks/",
+      "label": "Cobb County Parks",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/gwinnett-county-parks/",
+      "label": "Gwinnett County Parks",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/chattahoochee-oconee-national-forest/",
+      "label": "Chattahoochee Oconee National Forest",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/dahlonega-gold-mines/",
+      "label": "Dahlonega Gold Mines",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/unicoi-state-park/",
+      "label": "Unicoi State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/amicalola-falls-state-park/",
+      "label": "Amicalola Falls State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/tallulah-gorge-state-park/",
+      "label": "Tallulah Gorge State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/georgia-wildlife-management-areas/",
+      "label": "Georgia Wildlife Management Areas",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/west-point-lake/",
+      "label": "West Point Lake",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/ocmulgee-mounds-national-historical-park/",
+      "label": "Ocmulgee Mounds National Historical Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/high-falls-state-park/",
+      "label": "High Falls State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/harris-neck-national-wildlife-refuge/",
+      "label": "Harris Neck National Wildlife Refuge",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/smithgall-woods-state-park/",
+      "label": "Smithgall Woods State Park",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/atlantic-coast/",
+      "label": "Atlantic Coast",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/metro-atlanta/",
+      "label": "Metro Atlanta",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/north-georgia/",
+      "label": "North Georgia",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/georgia/south-georgia/",
+      "label": "South Georgia",
+      "state_from_path": "Georgia"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/myrtle-beach-city/",
+      "label": "Myrtle Beach City",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/north-myrtle-beach-city/",
+      "label": "North Myrtle Beach City",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/kiawah-beachwalker-county-park/",
+      "label": "Kiawah Beachwalker County Park",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/seabrook-island/",
+      "label": "Seabrook Island",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/hilton-head-island/",
+      "label": "Hilton Head Island",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/cowpens-national-battlefield/",
+      "label": "Cowpens National Battlefield",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/grand-strand/",
+      "label": "Grand Strand",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/lowcountry/",
+      "label": "Lowcountry",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/midlands/",
+      "label": "Midlands",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/south-carolina/upstate/",
+      "label": "Upstate",
+      "state_from_path": "South Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/ocracoke/",
+      "label": "Ocracoke",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/nags-head/",
+      "label": "Nags Head",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/cape-lookout-national-seashore/",
+      "label": "Cape Lookout National Seashore",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/atlantic-beach/",
+      "label": "Atlantic Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/wrightsville-beach/",
+      "label": "Wrightsville Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/topsail-beach/",
+      "label": "Topsail Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/north-topsail-beach/",
+      "label": "North Topsail Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/oak-island/",
+      "label": "Oak Island",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/holden-beach/",
+      "label": "Holden Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/sunset-beach/",
+      "label": "Sunset Beach",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/outer-banks/",
+      "label": "Outer Banks",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/crystal-coast/",
+      "label": "Crystal Coast",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/cape-fear/",
+      "label": "Cape Fear",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/north-carolina/brunswick-islands/",
+      "label": "Brunswick Islands",
+      "state_from_path": "North Carolina"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/cuivre-river-state-park/",
+      "label": "Cuivre River State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/finger-lakes-state-park/",
+      "label": "Finger Lakes State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/lake-of-the-ozarks-state-park/",
+      "label": "Lake Of The Ozarks State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/lake-wappapello-state-park/",
+      "label": "Lake Wappapello State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/long-branch-state-park/",
+      "label": "Long Branch State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/mark-twain-state-park/",
+      "label": "Mark Twain State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/pomme-de-terre-state-park/",
+      "label": "Pomme De Terre State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/stockton-state-park/",
+      "label": "Stockton State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/trail-of-tears-state-park/",
+      "label": "Trail Of Tears State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/harry-s-truman-state-park/",
+      "label": "Harry S Truman State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/watkins-mill-state-park/",
+      "label": "Watkins Mill State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/table-rock-state-park/",
+      "label": "Table Rock State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/wakonda-state-park/",
+      "label": "Wakonda State Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/battle-of-pilot-knob-shs/",
+      "label": "Battle Of Pilot Knob Shs",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/battle-of-athens-shs/",
+      "label": "Battle Of Athens Shs",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/truman-lake/",
+      "label": "Truman Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/stockton-lake/",
+      "label": "Stockton Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/pomme-de-terre-lake/",
+      "label": "Pomme De Terre Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/long-branch-lake/",
+      "label": "Long Branch Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/smithville-lake/",
+      "label": "Smithville Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/mark-twain-lake/",
+      "label": "Mark Twain Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/wappapello-lake/",
+      "label": "Wappapello Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/clearwater-lake/",
+      "label": "Clearwater Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/table-rock-lake/",
+      "label": "Table Rock Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/bull-shoals-lake/",
+      "label": "Bull Shoals Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/norfork-lake/",
+      "label": "Norfork Lake",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/ozark-national-scenic-riverways/",
+      "label": "Ozark National Scenic Riverways",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/gateway-arch-national-park/",
+      "label": "Gateway Arch National Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/wilsons-creek-national-battlefield/",
+      "label": "Wilsons Creek National Battlefield",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/ste-genevieve-national-historical-park/",
+      "label": "Ste Genevieve National Historical Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/mark-twain-national-forest/",
+      "label": "Mark Twain National Forest",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/mingo-national-wildlife-refuge/",
+      "label": "Mingo National Wildlife Refuge",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/big-muddy-nfwr/",
+      "label": "Big Muddy Nfwr",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/st-louis-city-parks/",
+      "label": "St Louis City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/tower-grove-park/",
+      "label": "Tower Grove Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/st-louis-county-parks/",
+      "label": "St Louis County Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/creve-coeur-lake-park/",
+      "label": "Creve Coeur Lake Park",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/st-charles-county-parks/",
+      "label": "St Charles County Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/jefferson-county-parks/",
+      "label": "Jefferson County Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/arnold-city-parks/",
+      "label": "Arnold City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/festus-city-parks/",
+      "label": "Festus City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/crystal-city-parks/",
+      "label": "Crystal City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/kansas-city-parks/",
+      "label": "Kansas City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/jackson-county-parks/",
+      "label": "Jackson County Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/independence-city-parks/",
+      "label": "Independence City Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/springfield-parks/",
+      "label": "Springfield Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/columbia-parks/",
+      "label": "Columbia Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/branson-parks/",
+      "label": "Branson Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/lake-of-the-ozarks-shoreline/",
+      "label": "Lake Of The Ozarks Shoreline",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/osage-beach-parks/",
+      "label": "Osage Beach Parks",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/st-louis-metro/",
+      "label": "St Louis Metro",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/kansas-city-metro/",
+      "label": "Kansas City Metro",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/lake-of-the-ozarks-region/",
+      "label": "Lake Of The Ozarks Region",
+      "state_from_path": "Missouri"
+    },
+    {
+      "url": "https://wheretodetect.org/metal-detecting/missouri/ozarks-south/",
+      "label": "Ozarks South",
+      "state_from_path": "Missouri"
+    }
+  ]
+}
