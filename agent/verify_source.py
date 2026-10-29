@@ -151,10 +151,67 @@ def _write_persist(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
+# The verdict words the extractor (_VERDICT) can produce, lower-cased.
+_VERDICT_WORDS = ("allowed", "permitted", "prohibited", "restricted", "limited", "not allowed")
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _is_day(v: str) -> bool:
+    if not _DAY.fullmatch(v):
+        return False
+    try:
+        time.strptime(v, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def _entry_problem(entry) -> str | None:
+    """Why a persisted entry may NOT be answered from, or None if it may.
+
+    MINIMUM checks only: every required field is a non-empty string, and the entry
+    has the shape confirm() writes — a verdict the extractor can produce, an indexed
+    wheretodetect.org page that the site-index lookup gives for that place (the same
+    lookup that offered it for approval), a sha256 page hash, real dates,
+    approved_by "owner", and a receipt-hash-shaped verify_promote_ref. This
+    does NOT prove the approval happened: a well-formed forged entry for an indexed
+    place still passes, and closing that needs chain-tip signing (post-Nov-4)."""
+    if not isinstance(entry, dict):
+        return "entry is not an object"
+    for f in _REQUIRED:
+        if not isinstance(entry.get(f), str) or not entry[f].strip():
+            return f"{f} is missing or not a non-empty string"
+    if entry["verdict"].strip().lower() not in _VERDICT_WORDS:
+        return "verdict is not one the extractor produces"
+    if not entry["url"].startswith("https://wheretodetect.org/"):
+        return "url is not a wheretodetect.org page"
+    if entry["url"] not in tier2.index_urls():
+        return "url is not in the site index"
+    # The place must lead to this url through the site-index lookup that proposed it
+    # (detect splits off a ", <state>"; "verify <place>" does not) — a label match,
+    # exact or partial, exactly as the candidate was found.
+    place, n = entry["place"], len(tier2.index_urls())
+    name, _, st = place.partition(",")
+    found = {c["url"] for c in tier2.candidates(name.strip(), st.strip() or None, limit=n)}
+    found |= {c["url"] for c in tier2.candidates(place, limit=n)}
+    if entry["url"] not in found:
+        return "place does not match the site-index label for its url"
+    if not _HEX64.fullmatch(entry["page_sha256"]):
+        return "page_sha256 is not 64 lowercase hex characters"
+    if not (_is_day(entry["verified_date"]) and _is_day(entry["approval_date"])):
+        return "verified_date / approval_date is not a YYYY-MM-DD date"
+    if entry["approved_by"] != "owner":
+        return "approved_by is not 'owner'"
+    if not _HEX64.fullmatch(entry["verify_promote_ref"]):
+        return "verify_promote_ref is not a receipt hash"
+    return None
+
+
 def _load_persist(path: Path):
     """Load the earned-answers file. Returns (confirmed, invalid_keys, error). Fail
-    closed: a missing file is simply empty; a malformed file, or an entry missing a
-    required field, is NOT answered from — the caller stages with the reason."""
+    closed: a missing file is simply empty; a malformed file, or an entry that fails
+    _entry_problem, is NOT answered from — the caller stages with the reason."""
     if not path.exists():
         return {}, set(), None
     try:
@@ -165,8 +222,10 @@ def _load_persist(path: Path):
         return {}, set(), "earned answers file unreadable"
     confirmed, invalid = {}, set()
     for key, entry in data["entries"].items():
-        if not isinstance(entry, dict) or any(not entry.get(f) for f in _REQUIRED):
+        if _entry_problem(entry) is not None:
             invalid.add(_norm(key))
+            if isinstance(entry, dict) and isinstance(entry.get("place"), str):
+                invalid.add(_norm(entry["place"]))   # stage the place it names, too
             continue
         confirmed[_norm(entry["place"])] = _confirmed_outcome(entry)
     return confirmed, invalid, None

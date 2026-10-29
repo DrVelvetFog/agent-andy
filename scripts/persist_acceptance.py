@@ -17,6 +17,22 @@ automatically. Every property the scope fix must hold, by name:
   f. a malformed file (or an entry missing a field) stages the affected place with
      the unreadable reason, never answers from it, never crashes.
   g. deleting an entry returns that place to staged, with its Tier 2 candidate.
+  h. D5: a field of the wrong type (a number, list, or dict where a string belongs —
+     verdict, source, quote, url, page_sha256) makes that entry invalid: the place
+     stages with the unreadable reason, and the store and the viewer still start.
+  i. N1 minimum: a hand-written entry does NOT answer when its url is off-site or
+     not in the site index (a made-up place), or, for an indexed place, when its
+     verdict is outside the extractor's vocabulary, its sha or dates are malformed,
+     approved_by is not "owner", its promote ref is not a receipt hash, or its place
+     does not lead to its url through the site-index lookup (a label mismatch).
+  j. the legit flow still holds: entries written by confirm() pass the checks, the
+     shipped (empty) data/confirmed_secondary.json loads empty, a well-formed entry
+     for a Tier 1 place still loses to Tier 1, the "<label>, <state>" place form is
+     accepted, and a partial-name approval ("Cocoa" -> the Cocoa Beach page) still
+     answers after a restart.
+  Known limit (printed, not a check): a fully well-formed forged entry for an indexed
+  place is indistinguishable from a real approval by the file alone — that full fix
+  needs chain-tip signing and is post-Nov-4 work.
 
 Temp persist files live under runs/ (gitignored); fetch is monkeypatched so the
 core is hermetic while the index-only fetch restriction still applies.
@@ -182,6 +198,102 @@ def main() -> int:
     o_g = detect.answer(ch, "Daytona Beach", store=vs.KnowledgeStore(persist_path=p_e))["outcome"]
     checks["g. deleting the entry returns the place to staged, with its Tier 2 candidate"] = (
         o_g["decision"] == detect.STAGED and bool(o_g.get("tier2_candidates")))
+
+    # h / i / j — every variant starts from a real confirm()-written entry
+    good = next(iter(e_typed.values()))
+    TYBEE = "https://wheretodetect.org/metal-detecting/georgia/tybee-island/"
+    JEKYLL = "https://wheretodetect.org/metal-detecting/georgia/jekyll-island/"
+    p_v = RUNS / "persist-v-cs.json"
+    ch = _chain("persist-v.jsonl")
+
+    def _ask(entry, place, key=None):
+        vs._write_persist(p_v, {"note": "t", "entries": {key or vs._norm(place): entry}})
+        try:
+            store = vs.KnowledgeStore(persist_path=p_v)
+        except Exception as ex:                       # D5: this used to crash on load
+            return {"crash": f"{type(ex).__name__}: {ex}"}
+        return detect.answer(ch, place, store=store)["outcome"]
+
+    def _refused(entry, place, key=None):
+        o = _ask(entry, place, key)
+        return ("crash" not in o and o["decision"] == detect.STAGED
+                and o.get("persist_error") == "earned answers file unreadable"
+                and o["evidence_tier"] != vs.CONFIRMED_SECONDARY)
+
+    d5 = {f"{field}={kind}": dict(good, **{field: bad})
+          for field in ("verdict", "source", "quote", "url", "page_sha256")
+          for kind, bad in (("number", 7), ("list", ["Allowed"]), ("dict", {"v": "Allowed"}))}
+    d5_ok = {name: _refused(e, "Daytona Beach") for name, e in d5.items()}
+    checks["h. D5: a number/list/dict in verdict, source, quote, url, or page_sha256 is invalid, no crash"] = (
+        all(d5_ok.values()) and len(d5_ok) == 15)
+    vs._write_persist(p_v, {"note": "t", "entries": {"daytona beach": dict(good, verdict=7)}})
+    try:
+        srv = andy_viewer.build_server(8789, chat_chain="persist-v-viewer.jsonl", reset=True, persist_path=p_v)
+        srv.server_close()
+        viewer_up = True
+    except Exception:
+        viewer_up = False
+    checks["h. D5: the viewer starts with a non-string verdict in the file"] = viewer_up
+
+    fake_hex = "a" * 64
+    forged = dict(good, place="Narnia", url="https://wheretodetect.org/metal-detecting/narnia/narnia/")
+    n1 = {
+        "made-up place, out-of-index url": (forged, "Narnia"),
+        "off-site url": (dict(good, url="https://evil.example/daytona-beach/"), "Daytona Beach"),
+        "verdict outside the vocabulary": (dict(good, verdict="Totally fine"), "Daytona Beach"),
+        "bad sha (short)": (dict(good, page_sha256="abc123"), "Daytona Beach"),
+        "bad sha (upper-case)": (dict(good, page_sha256=good["page_sha256"].upper()), "Daytona Beach"),
+        "bad date (not a date)": (dict(good, approval_date="Oct 28"), "Daytona Beach"),
+        "bad date (impossible)": (dict(good, verified_date="2026-13-45"), "Daytona Beach"),
+        "approved_by not owner": (dict(good, approved_by="admin"), "Daytona Beach"),
+        "promote ref not a receipt hash": (dict(good, verify_promote_ref="r"), "Daytona Beach"),
+        "place/url label mismatch (Tybee on the Daytona page)": (dict(good, place="Tybee Island"), "Tybee Island"),
+    }
+    n1_ok = {name: _refused(e, place) for name, (e, place) in n1.items()}
+    checks["i. N1: a made-up place with an out-of-index url does NOT answer"] = n1_ok["made-up place, out-of-index url"]
+    checks["i. N1: an off-site url does NOT answer"] = n1_ok["off-site url"]
+    checks["i. N1: bad verdict / sha / date / approved_by / promote ref does NOT answer"] = all(
+        n1_ok[k] for k in n1 if k.startswith(("verdict", "bad", "approved", "promote")))
+    checks["i. N1: a place/url label mismatch does NOT answer"] = n1_ok["place/url label mismatch (Tybee on the Daytona page)"]
+
+    checks["j. legit: both confirm()-written entries (typed + button) pass the checks"] = all(
+        vs._entry_problem(e) is None for e in list(e_typed.values()) + list(e_btn.values()))
+    shipped = vs.KnowledgeStore(persist_path=ROOT / "data" / "confirmed_secondary.json")
+    checks["j. legit: the shipped data/confirmed_secondary.json loads as empty"] = (
+        shipped.confirmed == {} and shipped.persist_error is None and shipped.invalid_places == set())
+    jek = dict(good, place="Jekyll Island", url=JEKYLL, verdict="Allowed")
+    o_j = _ask(jek, "Jekyll Island")
+    checks["j. legit: a well-formed entry for a Tier 1 place still loses to Tier 1"] = (
+        vs._entry_problem(jek) is None and "crash" not in o_j and o_j["rule_verdict"] == "restricted"
+        and o_j["evidence_tier"] != vs.CONFIRMED_SECONDARY)
+    o_st = _ask(dict(good, place="Daytona Beach, Florida"), "Daytona Beach, Florida")
+    checks["j. legit: the '<label>, <state>' place form still answers"] = (
+        "crash" not in o_st and o_st["decision"] == detect.ANSWERED_WITH_CAVEAT)
+    p_pn = RUNS / "persist-pn-cs.json"; p_pn.unlink(missing_ok=True)
+    ch_pn = _chain("persist-pn.jsonl")
+    vs.fetch = _ok_fetch
+    try:
+        s_pn = vs.KnowledgeStore(persist_path=p_pn)
+        detect.answer(ch_pn, "Cocoa", store=s_pn)          # Tier 2 offers the Cocoa Beach page
+        s_pn.propose(ch_pn); s_pn.confirm(ch_pn)
+    finally:
+        vs.fetch = saved
+    o_pn = detect.answer(ch_pn, "Cocoa", store=vs.KnowledgeStore(persist_path=p_pn))["outcome"]
+    checks["j. legit: a partial-name approval ('Cocoa' -> Cocoa Beach page) still answers after restart"] = (
+        o_pn["decision"] == detect.ANSWERED_WITH_CAVEAT and o_pn["evidence_tier"] == vs.CONFIRMED_SECONDARY)
+    p_pn.unlink(missing_ok=True)
+
+    print("  D5 variants:", ", ".join(f"{k}->{'staged' if v else 'ANSWERED/CRASH'}" for k, v in d5_ok.items()))
+    print("  N1 variants:")
+    for name, (e, _place) in n1.items():
+        print(f"    [{'staged' if n1_ok[name] else 'ANSWERED'}] {name}: {vs._entry_problem(e)}")
+    residual = dict(good, place="Tybee Island", url=TYBEE, verdict="Allowed", page_sha256=fake_hex,
+                    verify_promote_ref=fake_hex)
+    o_r = _ask(residual, "Tybee Island")
+    print(f"  KNOWN LIMIT (not a check): a fully well-formed forged Tybee entry -> "
+          f"{o_r.get('decision')} '{o_r.get('rule_verdict')}' — the file alone can't prove an approval; "
+          "full fix (chain-tip signing) is post-Nov-4.\n")
+    p_v.unlink(missing_ok=True)
 
     ok, _ = verify_chain(RUNS / "persist-e.jsonl")
     checks["a receipt chain verifies end to end"] = ok
