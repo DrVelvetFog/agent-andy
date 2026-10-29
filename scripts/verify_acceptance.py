@@ -13,6 +13,16 @@ hardening pass must pass, by name:
   f. a fetch failure         -> staged with the fetch error, never promoted
   g. out-of-index URL        -> refused WITHOUT a fetch ("URL not in site index")
   h. confirmed-secondary caveat present in BOTH the reply and the receipt
+  i. fetch() records every redirect (requested url, each hop, final url) against a
+     LOCAL redirecting server, and never requests a hop that leaves the allowed site
+  j. propose(): a redirect off wheretodetect.org, or to a wheretodetect url that is
+     not in the index, is refused — no extraction, no proposal — and the receipt
+     records the requested url, the final url, and the chain; a redirect between two
+     indexed pages is allowed, and the receipt and the proposal name the final url
+  k. name matching: a query under 3 characters or a bare substring (not a whole word)
+     has no candidate and fetches nothing; a word matching several pages stages with
+     the list and fetches nothing until the owner names one; an exact label still
+     verifies; the D5+N1 partial-name approval ("Cocoa") still loads after a restart
 
 Core runs hermetically: a real index URL with fetch() monkeypatched to return a
 fixture, so the fetch restriction passes while the page content stays fixed. One
@@ -22,7 +32,9 @@ live fetch of a real page is reported at the end.
 from __future__ import annotations
 
 import hashlib
+import http.server
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -167,6 +179,147 @@ def main() -> int:
     checks["h. caveat present in the receipt, never Tier 1"] = (
         all(w in (rcpt.get("caveat") or "").lower() for w in needed)
         and rcpt.get("evidence_tier") == vs.CONFIRMED_SECONDARY and rcpt.get("evidence_tier") != "primary")
+
+    # ---- i. fetch() against a LOCAL redirecting server (never the live site) ----
+    hits = {"site": [], "away": []}
+
+    def _server(tag, routes):
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits[tag].append(self.path)
+                kind, val = routes.get(self.path, ("page", b"<p>nothing here</p>"))
+                if kind == "redirect":
+                    self.send_response(302)
+                    self.send_header("Location", val)
+                    self.end_headers()
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(val)
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv
+
+    away = _server("away", {})                         # stands in for an off-site host
+    a_base = f"http://127.0.0.1:{away.server_address[1]}"
+    routes = {}                                        # filled once the port is known
+    site = _server("site", routes)
+    s_base = f"http://127.0.0.1:{site.server_address[1]}"
+    page_c = STANDARD.encode()
+    routes.update({"/a": ("redirect", f"{s_base}/b"), "/b": ("redirect", "/c"), "/c": ("page", page_c),
+                   "/off": ("redirect", f"{a_base}/x")})
+    try:
+        fi = vs.fetch(f"{s_base}/a", allowed_prefix=f"{s_base}/")
+        hits["away"].clear()
+        fo = vs.fetch(f"{s_base}/off", allowed_prefix=f"{s_base}/")
+        fd = vs.fetch(f"{s_base}/off")                 # default: only https://wheretodetect.org/ hops
+    finally:
+        site.shutdown(); away.shutdown()
+    checks["i. fetch(): a two-hop same-site redirect records requested -> hop -> final, sha of the final page"] = (
+        fi["ok"] and fi["redirect_chain"] == [f"{s_base}/a", f"{s_base}/b", f"{s_base}/c"]
+        and fi["final_url"] == f"{s_base}/c" and fi["sha256"] == hashlib.sha256(page_c).hexdigest())
+    checks["i. fetch(): a hop off the allowed site is recorded and NOT requested"] = (
+        not fo["ok"] and fo.get("left_site") and fo["redirect_chain"] == [f"{s_base}/off", f"{a_base}/x"]
+        and fo["final_url"] == f"{a_base}/x" and hits["away"] == []
+        and not fd["ok"] and fd.get("left_site"))
+
+    # ---- j. propose(): judged on the FINAL url and the whole chain ----
+    COCOA = "https://wheretodetect.org/metal-detecting/florida/cocoa-beach/"
+    UNINDEXED = "https://wheretodetect.org/metal-detecting/florida/nowhere-beach/"
+    OFFSITE = "https://evil.example/daytona-beach/"
+    sha = hashlib.sha256(STANDARD.encode()).hexdigest()
+
+    def _redirected(final, ok=True, extra=None):
+        hops = [INDEX_URL] + (extra or []) + [final]
+        if not ok:
+            return lambda url, timeout=30.0: {"ok": False, "error": f"redirect leaves {vs.SITE} (to {final}) — not followed",
+                                              "final_url": final, "redirect_chain": hops, "left_site": True}
+        return lambda url, timeout=30.0: {"ok": True, "html": STANDARD, "sha256": sha, "bytes": len(STANDARD),
+                                          "final_url": final, "redirect_chain": hops}
+
+    def _try(fetcher, place):
+        store = KnowledgeStore(persist_path=str(PERS))
+        n0 = len(chain.receipts())
+        vs.fetch = fetcher
+        try:
+            res = store.propose(chain, place, INDEX_URL)
+        finally:
+            vs.fetch = saved
+        new = [r["action"] for r in chain.receipts()[n0:]]
+        vf = next((a for a in new if a["type"] == "verify_fetch"), {})
+        return res, store, vf, [a for a in new if a["type"] == "verify_extract"]
+
+    r_off, st_off, vf_off, ex_off = _try(_redirected(OFFSITE, ok=False), "Daytona Beach")
+    checks["j. indexed url -> off-site redirect: refused, no extraction, no proposal"] = (
+        not r_off["ok"] and not ex_off and st_off.pending == {})
+    checks["j. ... and the receipt records the requested url, the off-site final url, and the chain"] = (
+        vf_off.get("requested_url") == INDEX_URL and vf_off.get("final_url") == OFFSITE
+        and vf_off.get("redirect_chain") == [INDEX_URL, OFFSITE] and vf_off.get("fetched_ok") is False)
+    r_bounce, st_bounce, vf_bounce, ex_bounce = _try(
+        _redirected(COCOA, extra=["https://evil.example/hop"]), "Daytona Beach")
+    checks["j. a chain that leaves the site mid-way is refused even if it lands back on an indexed page"] = (
+        not r_bounce["ok"] and not ex_bounce and st_bounce.pending == {}
+        and "left wheretodetect.org" in (vf_bounce.get("reason") or ""))
+    r_un, st_un, vf_un, ex_un = _try(_redirected(UNINDEXED), "Daytona Beach")
+    checks["j. indexed url -> unindexed wheretodetect url: refused, no extraction, no proposal"] = (
+        not r_un["ok"] and not ex_un and st_un.pending == {} and vf_un.get("final_url") == UNINDEXED
+        and "not in the site index" in (vf_un.get("reason") or ""))
+    r_ok, st_ok, vf_ok, ex_ok = _try(_redirected(COCOA), "Daytona Beach")
+    prop = (r_ok.get("proposal") or {})
+    checks["j. indexed url -> another indexed url: allowed; receipt + proposal name the final url and chain"] = (
+        r_ok["ok"] and prop.get("url") == COCOA and prop.get("requested_url") == INDEX_URL
+        and prop.get("redirect_chain") == [INDEX_URL, COCOA] and vf_ok.get("final_url") == COCOA
+        and vf_ok.get("redirect_chain") == [INDEX_URL, COCOA] and vf_ok.get("page_sha256") == sha
+        and ex_ok and ex_ok[0].get("url") == COCOA)
+
+    # ---- k. name matching ----
+    fetched = []
+
+    def _counting(url, timeout=30.0):
+        fetched.append(url)
+        return {"ok": True, "html": STANDARD, "sha256": sha, "bytes": len(STANDARD),
+                "final_url": url, "redirect_chain": [url]}
+
+    vs.fetch = _counting
+    try:
+        store_k = KnowledgeStore(persist_path=str(PERS))
+        short = [voice.chat_turn(chain, m, store=store_k, voice=False, demo=True) for m in ("verify a", "verify ab")]
+        checks["k. a query under 3 characters has no candidate and fetches nothing"] = (
+            tier2.candidates("a") == [] and tier2.candidates("ab") == [] and fetched == []
+            and all(not r["result"]["ok"] for r in short))
+        bare = voice.chat_turn(chain, "verify ona", store=store_k, voice=False, demo=True)
+        checks["k. a bare substring that is not a whole word ('ona', 'cocoa bea') has no candidate"] = (
+            tier2.candidates("ona") == [] and tier2.candidates("cocoa bea") == []
+            and not bare["result"]["ok"] and fetched == [])
+        many = detect.answer(chain, "Clearwater", store=store_k)["outcome"]
+        it = store_k.propose(chain)                       # "verify it" on the last staged candidate
+        checks["k. a word matching several pages stages with the list and fetches nothing"] = (
+            many["decision"] == detect.STAGED and len(many["tier2_candidates"]) == 2
+            and not it["ok"] and "several site pages match" in it["error"] and fetched == []
+            and store_k.pending == {})
+        picked = voice.chat_turn(chain, "verify Clearwater Beach", store=store_k, voice=False, demo=True)
+        checks["k. ... once the owner names one, that page (and only it) is fetched"] = (
+            picked["result"]["ok"] and len(fetched) == 1 and fetched[0].endswith("/clearwater-beach/"))
+        fetched.clear()
+        detect.answer(chain, "Daytona Beach", store=store_k)
+        ex = store_k.propose(chain)
+        checks["k. an exact label match still verifies as before"] = (
+            ex["ok"] and fetched == [INDEX_URL] and ex["proposal"]["url"] == INDEX_URL)
+        cs_pn = RUNS / "verify-accept-pn-cs.json"
+        cs_pn.unlink(missing_ok=True)
+        s_pn = KnowledgeStore(persist_path=str(cs_pn))
+        detect.answer(chain, "Cocoa", store=s_pn)
+        s_pn.propose(chain); s_pn.confirm(chain)
+        o_pn = detect.answer(chain, "Cocoa", store=KnowledgeStore(persist_path=str(cs_pn)))["outcome"]
+        checks["k. D5+N1 loose rule unchanged: 'Cocoa' (one page) still verifies and loads after restart"] = (
+            o_pn["decision"] == detect.ANSWERED_WITH_CAVEAT and o_pn["evidence_tier"] == vs.CONFIRMED_SECONDARY)
+        cs_pn.unlink(missing_ok=True)
+    finally:
+        vs.fetch = saved
 
     # ---- receipts + chain ----
     ok, reason = verify_chain(CHAIN)

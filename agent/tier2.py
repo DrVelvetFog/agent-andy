@@ -14,6 +14,7 @@ answers. Tier 2 sits behind it and can only ever add a candidate to a STAGE.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 INDEX_FILE = Path(__file__).resolve().parent.parent / "data" / "site_index.json"
@@ -23,6 +24,20 @@ _cache: dict | None = None
 
 def _norm(s) -> str:
     return " ".join(str(s).lower().split()).strip(" .,?!")
+
+
+# A query shorter than this never matches anything ("a" must not reach a page).
+MIN_QUERY = 3
+
+
+def _words(s) -> list[str]:
+    return re.findall(r"[a-z0-9']+", str(s).lower())
+
+
+def _has_run(hay: list[str], needle: list[str]) -> bool:
+    """True if `needle` appears in `hay` as a run of whole words."""
+    n = len(needle)
+    return n > 0 and any(hay[i:i + n] == needle for i in range(len(hay) - n + 1))
 
 
 def _load() -> dict:
@@ -53,10 +68,17 @@ def candidates(place: str, state: str | None = None, limit: int = 3) -> list[dic
     """Up to `limit` candidate site pages whose label matches `place` (normalized),
     optionally filtered to a state. Each is INDEX DATA ONLY — url, label, and a
     state derived from the URL path, explicitly unverified. No verdict is implied.
-    An empty list means no candidate; a URL is never invented."""
+    An empty list means no candidate; a URL is never invented.
+
+    Exact label matches come first. A partial match must be WHOLE WORDS — the
+    query's words as a run inside the label, or the label's words as a run inside
+    the query — never a bare substring, and a query under MIN_QUERY characters
+    matches nothing. Several partial matches are a list for the owner to choose
+    from; verify_source.propose() will not fetch one of them on its own."""
     q = _norm(place)
-    if not q:
+    if len(q) < MIN_QUERY:
         return []
+    qw = _words(q)
     st = _norm(state) if state else None
     exact, partial = [], []
     for e in _load().get("entries", []):
@@ -65,7 +87,7 @@ def candidates(place: str, state: str | None = None, limit: int = 3) -> list[dic
         label = _norm(e.get("label", ""))
         if label == q:
             exact.append(e)
-        elif label and (q in label or label in q):
+        elif label and (_has_run(_words(label), qw) or _has_run(qw, _words(label))):
             partial.append(e)
     picked = (exact + partial)[:limit]
     return [{"url": e["url"], "label": e.get("label", ""),

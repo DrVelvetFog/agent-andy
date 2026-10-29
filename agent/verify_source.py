@@ -57,17 +57,64 @@ def _text(html: str) -> str:
     return " ".join(text.split())
 
 
-def fetch(url: str, timeout: float = 30.0) -> dict:
-    """Read-only GET. Returns the page and a hash of exactly what was fetched, or
-    an error — never raises."""
+# The one site verify-on-demand reads from. A redirect may move within it, never off it.
+SITE = "https://wheretodetect.org/"
+
+
+class _LeftSite(Exception):
+    """A redirect pointed outside the allowed site; it was not followed."""
+
+
+class _Redirects(urllib.request.HTTPRedirectHandler):
+    """Record every redirect hop in order, and refuse — without requesting it — a
+    hop that leaves `allowed`."""
+
+    def __init__(self, hops: list, allowed: str | None):
+        super().__init__()
+        self.hops, self.allowed = hops, allowed
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.hops.append(newurl)
+        if self.allowed and not newurl.startswith(self.allowed):
+            raise _LeftSite(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def fetch(url: str, timeout: float = 30.0, allowed_prefix: str | None = SITE) -> dict:
+    """Read-only GET. Returns the page and a hash of exactly what was fetched, the
+    final url it was read from, and the redirect chain (requested url, each hop,
+    final url) — or an error, with the chain so far. Never raises. A redirect that
+    leaves `allowed_prefix` is not followed."""
+    hops = [url]
     try:
+        opener = urllib.request.build_opener(_Redirects(hops, allowed_prefix))
         req = urllib.request.Request(url, headers={"User-Agent": "agent-andy-verify"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read()
+        with opener.open(req, timeout=timeout) as r:
+            raw, final = r.read(), r.geturl()
+    except _LeftSite as e:
+        return {"ok": False, "error": f"redirect leaves {allowed_prefix} (to {e}) — not followed",
+                "final_url": str(e), "redirect_chain": hops, "left_site": True}
     except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"{type(e).__name__}: {e}",
+                "final_url": hops[-1], "redirect_chain": hops}
+    if final != hops[-1]:
+        return {"ok": False, "error": "redirect chain could not be determined",
+                "final_url": final, "redirect_chain": hops}
     return {"ok": True, "html": raw.decode("utf-8", "replace"),
-            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
+            "final_url": final, "redirect_chain": hops}
+
+
+def _several_pages(place: str, url: str) -> list:
+    """The page labels to choose between when `place` matches several site pages
+    only partially; empty when `url` is an exact label match or the only match."""
+    name, _, st = place.partition(",")
+    n = len(tier2.index_urls())
+    cands = tier2.candidates(name.strip(), st.strip() or None, limit=n) + tier2.candidates(place, limit=n)
+    if any(c["url"] == url and _norm(c["label"]) in {_norm(name), _norm(place)} for c in cands):
+        return []
+    labels = list(dict.fromkeys(c["label"] for c in cands))
+    return labels if len(labels) > 1 else []
 
 
 def extract(html: str) -> dict:
@@ -315,7 +362,11 @@ class KnowledgeStore:
     def propose(self, chain, place: str | None = None, url: str | None = None) -> dict:
         """Fetch + extract a candidate page, receipt both steps, and hold a pending
         proposal for the owner's approval. Fails closed — a bad fetch or an
-        unrecognized page is staged, never guessed."""
+        unrecognized page is staged, never guessed. The requested url must be in the
+        site index, and so must the FINAL url after redirects; a redirect that leaves
+        wheretodetect.org is not followed. When the place matches several pages only
+        partially, nothing is fetched until the owner names one. The receipt and the
+        proposal carry the requested url, the final url, and the redirect chain."""
         if not (place and url) and self.last_candidate:
             place, url = self.last_candidate
         if not (place and url):
@@ -331,19 +382,43 @@ class KnowledgeStore:
                           "reason": "URL not in site index"})
             return {"ok": False, "error": "URL not in site index — Andy only fetches pages in its site index"}
 
+        # Several pages match only partially: the owner picks one; nothing is fetched.
+        choices = _several_pages(place, url)
+        if choices:
+            chain.append({"type": "verify_fetch",
+                          "summary": f"several site pages match {place} — owner to pick one, nothing fetched",
+                          "place": place, "url": url, "fetched_ok": False,
+                          "page_sha256": None, "bytes": None, "candidates": choices,
+                          "reason": "several site pages match; owner must pick one"})
+            return {"ok": False, "error": (f"several site pages match “{place}”: {', '.join(choices)} — "
+                                           "say “verify <page name>” to pick one; nothing was fetched")}
+
         f = fetch(url)
+        final = f.get("final_url", url)
+        hops = f.get("redirect_chain") or [url]
+        reason = f.get("error")
+        if f["ok"] and any(not h.startswith(SITE) for h in hops):
+            reason = "a redirect left wheretodetect.org — fail closed"
+        elif f["ok"] and final not in tier2.index_urls():
+            reason = "the final url after redirects is not in the site index — fail closed"
+        accepted = f["ok"] and reason is None
         chain.append({"type": "verify_fetch",
-                      "summary": f"fetched candidate page for {place}",
-                      "place": place, "url": url, "fetched_ok": f["ok"],
-                      "page_sha256": f.get("sha256"), "bytes": f.get("bytes"),
-                      "reason": f.get("error")})
+                      "summary": (f"fetched candidate page for {place}" if accepted
+                                  else f"refused the fetched page for {place}" if f["ok"]
+                                  else f"could not fetch the candidate page for {place}"),
+                      "place": place, "url": url, "requested_url": url, "final_url": final,
+                      "redirect_chain": hops, "fetched_ok": accepted, "read": f["ok"],
+                      "page_sha256": f.get("sha256"), "bytes": f.get("bytes"),   # of the FINAL page
+                      "reason": reason})
         if not f["ok"]:
             return {"ok": False, "error": f"couldn't fetch the page ({f['error']}) — check by hand"}
+        if not accepted:
+            return {"ok": False, "error": f"{reason} — staged, check by hand"}
 
         ex = extract(f["html"])
         chain.append({"type": "verify_extract",
                       "summary": f"extracted rule for {place} (deterministic, verbatim-checked)",
-                      "place": place, "url": url, "extract_ok": ex["ok"],
+                      "place": place, "url": final, "extract_ok": ex["ok"],
                       "verdict": ex.get("verdict"), "quote": ex.get("quote"),
                       "source": ex.get("source"), "verified_date": ex.get("verified_date"),
                       "verbatim_in_page": ex["ok"],  # True only when the quote was found verbatim
@@ -351,8 +426,8 @@ class KnowledgeStore:
         if not ex["ok"]:
             return {"ok": False, "error": f"couldn't extract the rule ({ex['error']}) — staged, check by hand"}
 
-        proposal = {"place": place, "url": url, "page_sha256": f["sha256"],
-                    "verdict": ex["verdict"], "quote": ex["quote"],
+        proposal = {"place": place, "url": final, "requested_url": url, "redirect_chain": hops,
+                    "page_sha256": f["sha256"], "verdict": ex["verdict"], "quote": ex["quote"],
                     "source": ex["source"], "verified_date": ex["verified_date"]}
         self.pending[_norm(place)] = proposal
         return {"ok": True, "proposal": proposal}
