@@ -189,6 +189,29 @@ lives in `.env.local` (gitignored, read from `ELEVENLABS_API_KEY`); if it is
 missing or the call fails, Andy falls back to text and never fakes a voice.
 *Next:* pick voice vs. text automatically from whether headphones are connected.
 
+**Speak in the viewer — the Mic button.** Next to Send is a **Mic** button: click it,
+speak, click **Stop** (or it stops itself at 60 seconds). The page captures your
+microphone with the browser's Web Audio API and turns it into a **mono, 16-bit PCM,
+16 kHz WAV** in the page itself — it downsamples from the browser's 44.1/48 kHz —
+and posts that WAV to the viewer's `/api/voice` route. No webm/opus, no ffmpeg; the
+viewer stays stdlib-only. The server accepts only `audio/wav` from this page (the same
+Origin/Host check as every other route), up to **10 MB** and **60 seconds**, mono
+16-bit PCM at 16 or 24 kHz; anything else is refused before anything runs. It writes
+the WAV to a temp file under `runs/` (gitignored), sends it to **Muse Voice
+Transcribe**, deletes it, and runs the transcript through the **same checker-first gate
+and intents as a typed message** — detect, verify, approve / decline, trips, witness —
+receipted as `voice_input`, source `live-transcribe`, never as typed. With no
+`MODEL_API_KEY`, a failed call, or an empty transcript, no turn runs and no transcript
+is faked; the reason shows next to the button. If the browser has no microphone API or
+you deny permission, the button stays disabled and says why.
+
+What it costs and where it goes: **mic audio goes to Meta** for transcription, and the
+reply is voiced by **ElevenLabs** if that key is set. The mic has no demo mode, so an
+allowed general request calls Spark, exactly like a typed one; a spoken "witness my
+packing list" runs a real SAM check on the default photos. Tested by
+`scripts/chat_acceptance.py` with a WAV fixture and a stubbed transcriber; the live
+microphone path is checked by hand in Chrome.
+
 ## Run the demo — chat + receipts
 
 ```bash

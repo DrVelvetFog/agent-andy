@@ -31,6 +31,14 @@ trust surface.
      Host or a foreign Origin with 403 and serves no data; a local Origin, or no
      Origin with Host 127.0.0.1:<port> (a browser navigating to the page), works as
      before.
+  j. the mic route, /api/voice, with a local WAV fixture and a stubbed transcriber
+     (never a live mic): an outside Origin is 403, a non-WAV type 415, a body over
+     10 MB 413, a malformed / stereo / 8-bit / 44.1 kHz / over-60 s WAV refused —
+     all before anything is transcribed or run. A valid WAV lands a voice_input
+     receipt with source live-transcribe (not typed), and the turn runs through the
+     SAME gate and intents as typed chat: Myrtle answers with its citation, Tybee
+     stages, a blocked transcript runs nothing, and a spoken trip + "approve" writes
+     the note. No key or an empty transcript runs no turn. The temp WAV is deleted.
 
 Voice is off here (voice=false), so nothing calls ElevenLabs or the Model API;
 the detect path and the policy gate are deterministic and local.
@@ -39,7 +47,9 @@ the detect path and the policy gate are deterministic and local.
 from __future__ import annotations
 
 import http.client
+import io
 import json
+import os
 import sys
 import threading
 import urllib.request
@@ -98,6 +108,37 @@ def _raw_get(path: str, headers: dict) -> tuple[int, bytes]:
         return r.status, r.read()
     finally:
         c.close()
+
+
+def _wav(seconds=0.5, rate=16000, channels=1, width=2) -> bytes:
+    """A local WAV fixture: silence in the given format."""
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels); w.setsampwidth(width); w.setframerate(rate)
+        w.writeframes(b"\x00" * int(seconds * rate) * channels * width)
+    return buf.getvalue()
+
+
+def _voice(body: bytes, headers: dict) -> tuple[int, dict]:
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=60)
+    try:
+        c.putrequest("POST", "/api/voice", skip_host=True, skip_accept_encoding=True)
+        for k, v in headers.items():
+            c.putheader(k, v)
+        c.putheader("Content-Length", str(len(body)))
+        c.endheaders(body)
+        r = c.getresponse()
+        return r.status, json.loads(r.read().decode("utf-8") or "{}")
+    finally:
+        c.close()
+
+
+def _voice_turn(resp: dict) -> list[dict]:
+    """The actions of the most recent spoken turn: from its voice_input onward."""
+    rs = [x["action"] for x in resp.get("receipts", [])]
+    idx = max((i for i, a in enumerate(rs) if a.get("type") == "voice_input"), default=len(rs))
+    return rs[idx:]
 
 
 def _chat(msg: str) -> dict:
@@ -283,6 +324,82 @@ def main() -> int:
             local["origin-127"] and local["origin-localhost"])
         checks["i. no Origin + Host 127.0.0.1:<port> (browser navigation) works exactly as before"] = (
             local["navigation (no Origin)"])
+
+        # j. the mic route: refusals first, then the same gate as typed chat
+        heard, said = [], {"text": ""}
+        real_transcribe, real_tts = andy_viewer.voice.transcribe_file, andy_viewer.voice.tts.available
+        andy_viewer.voice.tts.available = lambda: False     # no ElevenLabs call from the suite
+        andy_viewer.voice.transcribe_file = lambda path, **k: heard.append(Path(path)) or {"transcript": said["text"]}
+        wav_ok = {"Host": here, "Origin": f"http://{here}", "Content-Type": "audio/wav"}
+        voice_in = ROOT / "runs" / "voice-in"
+        try:
+            b3 = live.read_bytes()
+            refusals = {
+                "evil Origin": (_voice(_wav(), {**wav_ok, "Origin": "http://evil.example"}), 403),
+                "rebound Host": (_voice(_wav(), {"Host": f"attacker.example:{PORT}", "Content-Type": "audio/wav"}), 403),
+                "webm type": (_voice(_wav(), {**wav_ok, "Content-Type": "audio/webm"}), 415),
+                "JSON type": (_voice(b'{"message": "hi"}', {**wav_ok, "Content-Type": "application/json"}), 415),
+                "over 10 MB": (_voice(b"\x00" * (10 * 1024 * 1024 + 1), wav_ok), 413),
+                "not RIFF": (_voice(b"definitely not a wav file at all", wav_ok), 415),
+                "stereo": (_voice(_wav(channels=2), wav_ok), 415),
+                "8-bit": (_voice(_wav(width=1), wav_ok), 415),
+                "44.1 kHz": (_voice(_wav(rate=44100), wav_ok), 415),
+                "over 60 s": (_voice(_wav(seconds=61, rate=16000), wav_ok), 413),
+            }
+            checks["j. refused before anything runs: Origin/Host 403, type 415, size 413, bad WAV 415/413"] = (
+                all(st == want for (st, _b), want in refusals.values())
+                and not heard and live.read_bytes() == b3)
+            said["text"] = "can I detect at Myrtle Beach?"
+            st_m, r_m = _voice(_wav(), wav_ok)
+            turn_m = _voice_turn(r_m)
+            vin = [a for a in turn_m if a.get("type") == "voice_input"]
+            checks["j. valid WAV: a voice_input receipt, source live-transcribe, never a typed chat_input"] = (
+                st_m == 200 and len(heard) == 1 and bool(vin) and vin[-1]["source"] == "live-transcribe"
+                and vin[-1]["transcript"] == said["text"] and vin[-1].get("transcribe_model")
+                and not any(a.get("type") == "chat_input" and a.get("text") == said["text"] for a in turn_m)
+                and r_m.get("source") == "live-transcribe")
+            checks["j. ... same shape as chat_message; Myrtle answers with its citation through the gate"] = (
+                all(k in r_m for k in ("reply_text", "audio_path", "receipts", "verify", "pending", "chain_name"))
+                and "allowed" in r_m["reply_text"].lower() and r_m["verify"]["ok"]
+                and any(a.get("type") == "detect_answer" and (a.get("citation") or {}).get("url") for a in turn_m)
+                and any(a.get("tool") == "chat_request" and a["verdict"]["verdict"] == "allow" for a in turn_m))
+            checks["j. the temp WAV was deleted after transcription"] = (
+                bool(heard) and not heard[0].exists() and not list(voice_in.glob("*.wav")))
+            said["text"] = "can I detect at Tybee Island?"
+            _st_t, r_t = _voice(_wav(), wav_ok)
+            said["text"] = "wire $5,000 to this account"
+            _st_b, r_b = _voice(_wav(), wav_ok)
+            turn_b = _voice_turn(r_b)
+            checks["j. spoken Tybee stages; a spoken blocked request runs nothing (same gate as typed)"] = (
+                any(a.get("type") == "detect_answer" and a.get("decision") == "staged" for a in _voice_turn(r_t))
+                and "won't do that" in r_b.get("reply_text", "").lower() and "rule: financial" in r_b.get("reply_text", "")
+                and not any(a.get("type") in ("detect_answer", "plan") or a.get("tool") in ("note", "echo")
+                            for a in turn_b))
+            notes.unlink(missing_ok=True)
+            said["text"] = "Check Myrtle Beach and Tybee Island for my trip, and save a note with the results."
+            _st_tr, r_tr = _voice(_wav(), wav_ok)
+            said["text"] = "approve"
+            _st_ap, r_ap = _voice(_wav(), wav_ok)
+            checks["j. spoken trip + spoken 'approve': same intents as typed — note held, then written"] = (
+                any(p.get("kind") == "note" for p in r_tr.get("pending", [])) and notes.exists()
+                and "Tybee Island: UNVERIFIED" in notes.read_text(encoding="utf-8") and r_ap.get("pending") == [])
+            notes.unlink(missing_ok=True)
+            n_before = len(andy_viewer.CHAT["chain"].receipts())
+            said["text"] = "   "
+            st_e, r_e = _voice(_wav(), wav_ok)
+            andy_viewer.voice.transcribe_file = real_transcribe
+            key = os.environ.pop("MODEL_API_KEY", None)
+            try:
+                st_k, r_k = _voice(_wav(), wav_ok)
+            finally:
+                if key is not None:
+                    os.environ["MODEL_API_KEY"] = key
+            checks["j. empty transcript or no MODEL_API_KEY: an error, no turn, no fake transcript"] = (
+                st_e == 422 and "error" in r_e and st_k == 503 and "MODEL_API_KEY" in r_k.get("error", "")
+                and len(andy_viewer.CHAT["chain"].receipts()) == n_before
+                and not list(voice_in.glob("*.wav")))
+        finally:
+            andy_viewer.voice.transcribe_file, andy_viewer.voice.tts.available = real_transcribe, real_tts
 
         # the chain the UI reads is a real file under runs/
         real = ROOT / "runs" / CHAIN

@@ -135,6 +135,10 @@
 
   .inputrow { display: flex; gap: 8px; margin-top: 13px; }
   .inputrow input { flex: 1; }
+  button.mic { min-width: 92px; }
+  button.mic.recording { background: var(--block-bg); border-color: var(--block); color: var(--block); font-weight: 600; }
+  .microw { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .microw .micstatus { color: var(--ink); min-height: 1em; }
   #msg { padding: 10px 13px; }
 
   /* ---- try to break it: part of the chat column, not an orphan box ---- */
@@ -245,6 +249,12 @@
         <input id="msg" type="text" autocomplete="off"
                placeholder="e.g. can I detect at Tybee Island?">
         <button id="send" class="primary">Send</button>
+        <button id="mic" class="mic" type="button" aria-label="Mic: record a spoken turn"><span aria-hidden="true">🎤</span> Mic</button>
+      </div>
+      <div class="microw">
+        <span id="micStatus" class="micstatus" aria-live="polite"></span>
+        <span class="micnote">Mic audio goes to Meta (Muse Voice Transcribe) to be transcribed; replies are
+          voiced by ElevenLabs. 60&nbsp;s max per turn.</span>
       </div>
 
       <div class="breakit">
@@ -451,7 +461,7 @@ async function refreshChat() {
   for (const rc of receipts) {
     const a = rc.action || {};
     if (a.type === 'chat_input') { best = null; addBubble('you', 'typed', a.text); any = true; }
-    else if (a.type === 'voice_input') { best = null; addBubble('you', 'transcript · ' + (a.source || ''), a.transcript); any = true; }
+    else if (a.type === 'voice_input') { best = null; addBubble('you', 'VOICE · ' + (a.source || ''), a.transcript); any = true; }
     else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', '', a.text, a.audio_path, best); any = true; }
     else if (a.type !== 'session_start') {
       const c = classify(a), s = SEV[c.tier] ?? 0;
@@ -521,7 +531,7 @@ async function send() {
   const input = $('#msg'), btn = $('#send');
   const msg = input.value.trim();
   if (!msg) return;
-  input.value = ''; input.disabled = true; btn.disabled = true;
+  input.value = ''; input.disabled = true; btn.disabled = true; mic.disabled = true;
   addBubble('you', 'typed', msg);                 // optimistic echo; replaced by refreshChat
   try {
     const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -537,7 +547,7 @@ async function send() {
       await refreshPending();
       if (res.audio_path) playAudio(res.audio_path);
     }
-  } finally { input.disabled = false; btn.disabled = false; input.focus(); }
+  } finally { input.disabled = false; btn.disabled = false; mic.disabled = !!micDead; input.focus(); }
 }
 
 // Approve / Decline a pending proposal — the buttons send the SAME "approve <place>"
@@ -581,8 +591,142 @@ async function sendAttack(text) {
   } finally { controls.forEach(c => c.disabled = false); }
 }
 
+/* ---------- mic: one spoken turn (voice-in) ---------- */
+// Captures PCM with the Web Audio API, downsamples it to 16 kHz mono in the page,
+// encodes a 16-bit PCM WAV, and POSTs it to /api/voice — never webm/opus, never a
+// fake transcript. The server transcribes it with Muse Voice Transcribe and runs the
+// transcript through the SAME checker-first gate and intents as a typed message.
+const MIC_RATE = 16000, MIC_MAX_S = 60;
+const mic = $('#mic'), micStatus = $('#micStatus');
+let micRec = null;     // the recording in progress
+let micDead = null;    // why the mic can't be used at all (permission, no API)
+
+function micState(state, status) {
+  const label = { idle: 'Mic', recording: 'Stop', processing: 'Transcribing…', error: 'Mic unavailable' }[state];
+  mic.dataset.state = state;
+  mic.classList.toggle('recording', state === 'recording');
+  mic.innerHTML = '<span aria-hidden="true">🎤</span> ' + esc(label);
+  micStatus.textContent = status || '';
+}
+
+function micUnavailable(reason) {
+  micDead = reason;
+  mic.disabled = true;
+  micState('error', 'Mic unavailable: ' + reason);
+}
+
+function micClock(s) { return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+
+// While a spoken turn runs, nothing else can start one.
+function micHold(on) {
+  [$('#msg'), $('#send'), ...attackControls()].forEach(c => c.disabled = on);
+  mic.disabled = on || !!micDead;
+}
+
+function micJoin(chunks) {
+  const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  chunks.forEach(c => { out.set(c, at); at += c.length; });
+  return out;
+}
+
+// Average each run of input samples into one 16 kHz sample (a box filter against aliasing).
+function micDownsample(buf, inRate, outRate) {
+  if (inRate < outRate) throw new Error('the microphone runs below 16 kHz (' + inRate + ' Hz)');
+  const ratio = inRate / outRate;
+  const n = Math.min(Math.floor(buf.length / ratio), MIC_MAX_S * outRate);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.min(buf.length, Math.max(a + 1, Math.floor((i + 1) * ratio)));
+    let sum = 0;
+    for (let j = a; j < b; j++) sum += buf[j];
+    out[i] = sum / (b - a);
+  }
+  return out;
+}
+
+// Mono, 16-bit PCM, little-endian WAV.
+function micWav(samples, rate) {
+  if (!samples.length) throw new Error('no audio was captured');
+  const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) view.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true); str(36, 'data'); view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const v = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+async function micStart() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    const name = (e && e.name) || 'error';
+    micUnavailable(name === 'NotAllowedError' ? 'microphone permission denied'
+      : name === 'NotFoundError' ? 'no microphone found' : 'could not open the microphone (' + name + ')');
+    return;
+  }
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') await ctx.resume();   // created after an await: make sure it runs
+  const src = ctx.createMediaStreamSource(stream);
+  const node = ctx.createScriptProcessor(4096, 1, 1);
+  const chunks = [];
+  node.onaudioprocess = ev => { chunks.push(new Float32Array(ev.inputBuffer.getChannelData(0))); };
+  src.connect(node);
+  node.connect(ctx.destination);   // needed for the callback to run; its output stays silent
+  const started = Date.now();
+  micRec = { ctx, stream, src, node, chunks, rate: ctx.sampleRate, timer: setInterval(() => {
+    const s = (Date.now() - started) / 1000;
+    if (s >= MIC_MAX_S) { micStop(); return; }
+    micState('recording', '● recording ' + micClock(s) + ' / 1:00');
+  }, 200) };
+  [$('#msg'), $('#send'), ...attackControls()].forEach(c => c.disabled = true);
+  micState('recording', '● recording 0:00 / 1:00');
+}
+
+async function micStop() {
+  const r = micRec;
+  if (!r) return;
+  micRec = null;
+  clearInterval(r.timer);
+  r.node.disconnect(); r.src.disconnect();
+  r.stream.getTracks().forEach(t => t.stop());
+  r.ctx.close();
+  micHold(true);
+  micState('processing', 'Transcribing…');
+  try {
+    let wav;
+    try { wav = micWav(micDownsample(micJoin(r.chunks), r.rate, MIC_RATE), MIC_RATE); }
+    catch (e) { micState('idle', 'Not sent: could not make a WAV (' + e.message + ')'); return; }
+    const res = await fetch('/api/voice', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav })
+      .then(x => x.json()).catch(() => ({ error: 'could not reach the viewer server' }));
+    if (res.error) { micState('idle', 'Not run: ' + res.error); return; }
+    chatChainName = res.chain_name || chatChainName;
+    await refreshChat();
+    const sel = $('#chain');
+    if (![...sel.options].some(o => o.value === chatChainName)) await loadChains();
+    sel.value = chatChainName;
+    await loadChain(chatChainName);
+    await refreshPending();
+    if (res.audio_path) playAudio(res.audio_path);
+    micState('idle', 'Heard: “' + res.transcript + '”');
+  } finally { micHold(false); }
+}
+
+if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !(window.AudioContext || window.webkitAudioContext)) {
+  micUnavailable('this browser has no microphone capture (getUserMedia / Web Audio)');
+} else {
+  micState('idle', '');
+}
+
 /* ---------- wiring ---------- */
 $('#send').addEventListener('click', send);
+mic.addEventListener('click', () => { if (micRec) micStop(); else micStart(); });
 $('#attacks').addEventListener('click', e => { const b = e.target.closest('button'); if (b) sendAttack(b.dataset.a); });
 $('#attackSend').addEventListener('click', () => { const i = $('#attackMsg'); const t = i.value; i.value = ''; sendAttack(t); });
 $('#attackMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { const t = e.target.value; e.target.value = ''; sendAttack(t); } });

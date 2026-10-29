@@ -335,12 +335,15 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 
 def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
               play: bool = False, run_general: bool = True, strict: bool = False,
-              store=None, demo: bool = False) -> dict:
-    """One TYPED chat message through the SAME gate as spoken input.
+              store=None, demo: bool = False, source: str = TYPED) -> dict:
+    """One chat message — typed, or a live transcript from the viewer's mic —
+    through the SAME gate, with every intent (approve, decline, verify, trips).
 
-    The input is receipted as `chat_input` with source `typed` — never dressed up
-    as a voice transcription. CHECKER FIRST: the policy engine rules on the raw
-    message before any intent runs. A blocked message (exfiltration, money, a
+    A typed message is receipted as `chat_input` with source `typed` — never dressed
+    up as a voice transcription. A mic transcript (`source="live-transcribe"`) is
+    receipted as `voice_input` with its source and transcribe model, exactly as
+    handle() stamps one — never as typed. CHECKER FIRST: the policy engine rules on
+    the raw message before any intent runs. A blocked message (exfiltration, money, a
     secret field, about a person, a gate override) is refused, receipted, and runs
     nothing — not approve, verify, task, detect, or witness, and no SAM call. An
     allowed or staged one goes to its intent handler, which keeps its own gate;
@@ -357,12 +360,21 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         run_general = False
     if daemon is not None:
         daemon.new_task()
-    chain.append({
-        "type": "chat_input",
-        "summary": f"typed: {message[:80]}",
-        "text": message,
-        "source": TYPED,            # typed, NOT a voice transcription
-    })
+    if source == TYPED:
+        chain.append({
+            "type": "chat_input",
+            "summary": f"typed: {message[:80]}",
+            "text": message,
+            "source": TYPED,            # typed, NOT a voice transcription
+        })
+    else:
+        chain.append({
+            "type": "voice_input",
+            "summary": f"heard ({source}): {message[:80]}",
+            "transcript": message,
+            "source": source,
+            "transcribe_model": TRANSCRIBE_MODEL if source == LIVE else None,
+        })
 
     intent, arg = route(message)
     verdict = _raw_verdict(message)
@@ -453,4 +465,4 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
 
     reply = speak(reply_text, chain, voice=voice, play=play)
     daemon_info = daemon.observe(chain, daemon_src, voice_mode=voice) if daemon is not None else None
-    return {**payload, "source": TYPED, "reply_text": reply_text, "reply": reply, "daemon": daemon_info}
+    return {**payload, "source": source, "reply_text": reply_text, "reply": reply, "daemon": daemon_info}

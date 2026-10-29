@@ -24,10 +24,13 @@ ElevenLabs, as disclosed in the README.
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import os
 import sys
 import tempfile
 import time
+import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -93,17 +96,18 @@ def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True, persist_p
 
 
 def chat_message(message: str, voice_mode="auto", run_general: bool = True,
-                 demo: bool = False) -> dict:
-    """Run one typed message through the real gate and return the reply, the live
+                 demo: bool = False, source: str = voice.TYPED) -> dict:
+    """Run one message through the real gate and return the reply, the live
     chain, and the verifier's verdict — exactly what the page renders. `demo` is the
-    "Try to break it" mode: same checker and receipts, no model spend."""
+    "Try to break it" mode: same checker and receipts, no model spend. `source` is
+    "typed" for the chat box, "live-transcribe" for the mic."""
     if CHAT["chain"] is None:
         init_chat()
     if not message or not message.strip():
         return {"error": "empty message"}
     chain = CHAT["chain"]
     res = voice.chat_turn(chain, message, daemon=CHAT["daemon"], store=CHAT["store"],
-                          voice=voice_mode, run_general=run_general, demo=demo)
+                          voice=voice_mode, run_general=run_general, demo=demo, source=source)
     reply = res["reply"]
     d = res.get("daemon")
     daemon_out = ({"text": d["text"], "about": d.get("about"),
@@ -113,7 +117,7 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True,
     return {
         "intent": res.get("intent"),
         "reply_text": res["reply_text"],
-        "source": res["source"],                 # "typed" — never a transcription
+        "source": res["source"],                 # "typed" or "live-transcribe", never blurred
         "audio_path": reply.get("audio_path"),    # the browser plays it, if voiced
         "tts_engine": reply.get("tts_engine"),
         "daemon": daemon_out,                     # only present if the daemon really spoke
@@ -123,6 +127,69 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True,
         "receipts": chain.receipts(),
         "verify": {"ok": ok, "reason": reason},
     }
+
+
+# Mic audio limits. The page sends mono 16-bit PCM WAV at 16 kHz and stops itself at
+# 60 s (about 1.9 MB); the server also accepts 24 kHz, the other rate the transcribe
+# endpoint takes, and refuses anything bigger or longer.
+MAX_WAV_BYTES = 10 * 1024 * 1024
+MAX_WAV_SECONDS = 60.5
+WAV_RATES = (16000, 24000)
+
+
+def wav_problem(raw: bytes) -> tuple[int, str] | None:
+    """Why this body is not a WAV the transcriber takes, as (status, reason), or
+    None. Checked before anything is transcribed or run."""
+    if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        return 415, "not a RIFF/WAVE file"
+    try:
+        with wave.open(io.BytesIO(raw)) as w:
+            ch, width, rate = w.getnchannels(), w.getsampwidth(), w.getframerate()
+            frames, comp = w.getnframes(), w.getcomptype()
+    except (wave.Error, EOFError) as e:
+        return 415, f"not a readable PCM WAV ({e})"
+    if comp != "NONE":
+        return 415, "WAV is compressed; PCM only"
+    if ch != 1:
+        return 415, f"WAV has {ch} channels; mono only"
+    if width != 2:
+        return 415, f"WAV is {8 * width}-bit; 16-bit PCM only"
+    if rate not in WAV_RATES:
+        return 415, f"WAV is {rate} Hz; 16 kHz or 24 kHz only"
+    if frames == 0:
+        return 415, "WAV has no audio"
+    if frames / rate > MAX_WAV_SECONDS:
+        return 413, f"WAV is {frames / rate:.1f} s; 60 s at most"
+    return None
+
+
+def voice_message(wav: bytes) -> tuple[int, dict]:
+    """One spoken turn from the page's mic: transcribe the WAV with Muse Voice
+    Transcribe, then run the transcript through chat_message — the SAME checker-first
+    gate and intents as typed chat — receipted as voice_input, source live-transcribe.
+    The WAV lives only in a temp file under runs/ (gitignored), deleted right after.
+    No key, a failed call, or an empty transcript is an error and runs NO turn —
+    never a fake or injected transcript."""
+    tmp_dir = RUNS / "voice-in"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=tmp_dir, suffix=".wav")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(wav)
+        try:
+            tr = voice.transcribe_file(tmp)
+        except RuntimeError as e:            # e.g. MODEL_API_KEY is not set
+            return 503, {"error": f"transcription unavailable: {e} — nothing was run"}
+        except Exception as e:
+            return 502, {"error": f"transcription failed ({type(e).__name__}: {str(e)[:160]}) — nothing was run"}
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+    text = (tr.get("transcript") or "").strip()
+    if not text:
+        return 422, {"error": "the transcript was empty — nothing was run"}
+    out = chat_message(text, source=voice.LIVE)
+    out["transcript"] = text
+    return 200, out
 
 
 def pending_list() -> dict:
@@ -286,8 +353,44 @@ class Handler(BaseHTTPRequestHandler):
             return origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}")
         return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
 
+    def _voice_post(self) -> None:
+        """/api/voice: the body is WAV audio, not JSON, so — like /api/daemon-dismiss —
+        it is exempt from the JSON content-type rule; it keeps the Origin/Host check,
+        and instead must be audio/wav, at most 10 MB, and a mono 16-bit PCM WAV at
+        16 or 24 kHz. Every refusal comes before anything is transcribed or run."""
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length > MAX_WAV_BYTES:
+            left = min(length, 4 * MAX_WAV_BYTES)     # drain, bounded, so the client gets the 413
+            while left > 0:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+            raw = None
+        else:
+            raw = self.rfile.read(length) if length else b""
+        if not self._local_request():
+            self._json({"error": "forbidden: request not from this page (Origin/Host)"}, 403)
+            return
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "audio/wav":
+            self._json({"error": "unsupported media type: send audio/wav"}, 415)
+            return
+        if raw is None:
+            self._json({"error": "audio too large: 10 MB at most"}, 413)
+            return
+        bad = wav_problem(raw)
+        if bad:
+            self._json({"error": f"not accepted: {bad[1]}"}, bad[0])
+            return
+        status, body = voice_message(raw)
+        self._json(body, status)
+
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         u = urlparse(self.path)
+        if u.path == "/api/voice":
+            self._voice_post()
+            return
         length = int(self.headers.get("Content-Length", 0) or 0)
         raw = self.rfile.read(length) if length else b""
         # Checked before ANY handler runs: a refused POST leaves no receipt and no state.
