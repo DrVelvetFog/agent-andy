@@ -13,7 +13,9 @@ block). Two buttons carry the whole thesis:
   COPY (the real chain on disk is never touched) and shows verification fail,
   by receipt number — the tamper-evidence, made visible.
 
-Stdlib only, binds to 127.0.0.1 only. Nothing leaves the laptop.
+Stdlib only. The viewer binds 127.0.0.1 only and takes no outside connections,
+but Andy's brain, eyes, voice-in, and voice-out services send data to Meta and
+ElevenLabs, as disclosed in the README.
 
     python3 viewer/andy_viewer.py          # then open http://127.0.0.1:8799
     python3 viewer/andy_viewer.py --port 9000

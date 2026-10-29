@@ -91,7 +91,7 @@ def main() -> int:
         checks["b. a matching line is cited with the policy reason + receipt reference"] = (
             rb["verdict"]["verdict"] == "block"
             and rb.get("cited_policy") == REFUSE[0]["text"]
-            and "nothing leaves the laptop" in rt            # policy reason
+            and "to an unapproved destination" in rt         # policy reason
             and "nothing of mine leaves this machine" in rt  # the standing-policy line
             and "receipt" in rt)                             # the receipt reference
 

@@ -17,6 +17,9 @@ that no face / avatar / downloaded image / "unbreakable" claim crept in.
   c. No external font / image / script / stylesheet: the served page references no
      off-host resource (fully inline; loads offline, 127.0.0.1 only).
   d. No face, avatar, character art, downloaded image, or "unbreakable" claim.
+  e. Honest egress: the served footer names Meta and ElevenLabs as where Andy's
+     services send data, and neither the footer nor the viewer's own docstring
+     claims that nothing leaves the laptop.
 """
 
 from __future__ import annotations
@@ -133,6 +136,17 @@ def main() -> int:
             and "avatar" not in low and "mascot" not in low)
         checks["d. no 'unbreakable' claim"] = ("unbreakable" not in low)
         checks["d. the only glyph is an inline <svg>"] = ("<svg" in page and ".png" not in low and ".jpg" not in low)
+
+        # ---- e. honest egress disclosure ----
+        m = re.search(r"<footer>(.*?)</footer>", page, re.S)
+        footer = m.group(1) if m else ""
+        checks["e. the served footer names Meta and ElevenLabs as egress"] = (
+            "Meta" in footer and "ElevenLabs" in footer and "127.0.0.1" in footer)
+        checks["e. the footer does not claim nothing leaves the laptop"] = (
+            bool(footer) and "nothing leaves the laptop" not in footer.lower())
+        checks["e. the viewer module docstring does not claim nothing leaves the laptop"] = (
+            "nothing leaves the laptop" not in (andy_viewer.__doc__ or "").lower()
+            and "127.0.0.1" in (andy_viewer.__doc__ or ""))
     finally:
         server.shutdown()
         Path(PERS).unlink(missing_ok=True)

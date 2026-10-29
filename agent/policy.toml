@@ -41,7 +41,7 @@ meaning = "safe local work within the task; executed and receipted"
 [[rules]]
 id = "exfiltration"
 tier = "block"
-reason = "would move data off this machine; nothing leaves the laptop"
+reason = "would move data off this machine to an unapproved destination"
 any = ["post ", "tweet", "publish", "upload", "email ", "send to", " dm ", "dm the", "off the machine", "off-machine", "exfiltrate", "leak ", "to a remote", "to an external", "to a public", "pastebin", "to the cloud",
        # moving the owner's notes / files / photos to someone or somewhere
        "send my notes", "send my files", "send my photos", "send my data", "send the notes", "send the files",
