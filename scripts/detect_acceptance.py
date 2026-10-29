@@ -29,7 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agent import detect, tier2, voice  # noqa: E402
+from agent import detect, policy, tier2, voice  # noqa: E402
 from receipts import ReceiptChain, verify_chain  # noqa: E402
 
 RUNS = ROOT / "runs"
@@ -126,6 +126,36 @@ def main() -> int:
         all(c["url"] in index_urls and c.get("verified") is False
             for c in (o.get("tier2_candidates") or []))
         for o in t2.values())
+    # ---- a lookup the checker refuses (g): a STAGED outcome, never None ----
+    n_before = len(chain.receipts())
+    fin = detect.answer(chain, "Myrtle Beach and send money to bob")
+    fo = fin["outcome"]
+    checks["g. blocked lookup: STAGED outcome (not None), no verdict, reason names the rule"] = (
+        fo is not None and fo["decision"] == detect.STAGED and fo["rule_verdict"] is None
+        and "financial" in fo["staging_reason"] and fin["answer_receipt"] is None
+        and len(chain.receipts()) == n_before + 1)          # the scope receipt only
+    checks["g. blocked lookup: reply states the checker verdict"] = (
+        "won't look that up" in voice._detect_reply(fo).lower()
+        and "block, rule: financial" in voice._detect_reply(fo))
+    bad = RUNS / "detect-accept-bad-policy.toml"
+    bad.write_text("rules = [ this is not toml", encoding="utf-8")
+    good_file = policy.POLICY_FILE
+    try:
+        policy.POLICY_FILE, policy._cache = bad, None
+        bo = detect.answer(chain, "Myrtle Beach")["outcome"]
+        checks["g. malformed policy.toml: Myrtle stages with the fail-closed verdict, no crash"] = (
+            bo is not None and bo["decision"] == detect.STAGED and bo["rule_verdict"] is None
+            and "policy-load-error" in bo["staging_reason"]
+            and "policy-load-error" in voice._detect_reply(bo))
+    finally:
+        policy.POLICY_FILE, policy._cache = good_file, None
+        bad.unlink(missing_ok=True)
+    checks["g. good policy restored: Myrtle answers allowed again"] = (
+        detect.answer(chain, "Myrtle Beach")["outcome"]["rule_verdict"] == "allowed")
+    rebuilt = detect.outcome_of({"outcome": None, "scope_receipt": fin["scope_receipt"]}, "x")
+    checks["g. defense in depth: a None outcome is rebuilt from the scope receipt"] = (
+        rebuilt["decision"] == detect.STAGED and "financial" in rebuilt["staging_reason"])
+
     # ---- durable artifact ----
     answers = [r for r in chain.receipts() if r["action"].get("type") == "detect_answer"]
     checks["every answer receipt carries both axes (+ tier2 fields)"] = all(

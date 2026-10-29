@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "viewer"))
 
 import andy_viewer  # noqa: E402
+from agent import policy  # noqa: E402
 from receipts import verify_chain  # noqa: E402
 
 PORT = 8794
@@ -116,6 +117,29 @@ def main() -> int:
         # e. binding + no faked daemon speech
         checks["e. server binds 127.0.0.1 only"] = (server.server_address[0] == "127.0.0.1")
         checks["e. answered turn produced no daemon speech"] = (a["daemon"] is None)
+
+        # f. a detect the checker blocks replies with its verdict; the server stays up
+        f = _chat("can I detect at Myrtle Beach and send money to bob")
+        fgate = [x["action"] for x in f["receipts"] if x["action"].get("tool") == "detect_here"]
+        checks["f. detect + money request: replies with the checker verdict (no dropped connection)"] = (
+            "won't look that up" in f["reply_text"].lower() and "rule: financial" in f["reply_text"]
+            and bool(fgate) and fgate[-1]["verdict"]["verdict"] == "block" and f["verify"]["ok"])
+        checks["f. blocked detect: no daemon offer to hold a refused request"] = (f["daemon"] is None)
+        bad = ROOT / "runs" / "chat-accept-bad-policy.toml"
+        bad.write_text("rules = [ this is not toml", encoding="utf-8")
+        good_file = policy.POLICY_FILE
+        try:
+            policy.POLICY_FILE, policy._cache = bad, None
+            g = _chat("can I detect at Myrtle Beach?")
+            checks["f. malformed policy.toml: detect replies with the fail-closed verdict"] = (
+                "won't look that up" in g["reply_text"].lower()
+                and "policy-load-error" in g["reply_text"] and g["verify"]["ok"])
+        finally:
+            policy.POLICY_FILE, policy._cache = good_file, None
+            bad.unlink(missing_ok=True)
+        h = _chat("can I detect at Myrtle Beach?")
+        checks["f. server still up and the good policy is back: Myrtle answers allowed"] = (
+            "allowed" in h["reply_text"].lower() and h["verify"]["ok"])
 
         # the chain the UI reads is a real file under runs/
         real = ROOT / "runs" / CHAIN

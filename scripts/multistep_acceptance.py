@@ -28,6 +28,10 @@ stating Tybee as unverified, never allowed. Driven against the real server.
   h. a held note for non-rehearsed places (Jekyll Island + Tybee Island), approved:
      the approval reply quotes the note actually written — Jekyll restricted, Tybee
      unverified — and never names Myrtle Beach or calls either place allowed.
+  i. a trip with a step the checker blocks ("my password"): no crash; Myrtle is still
+     reported, the blocked step is reported as not looked up with its rule, the note
+     is held (never written as if that step succeeded), the waiting line does not name
+     Tybee (it is not in this trip), and decline skips it.
 
 No new tool is added; detect, echo, and the sandboxed note writer are all that run.
 """
@@ -212,6 +216,24 @@ def main() -> int:
         checks["h. Jekyll + Tybee: approval reply quotes that note, never Myrtle or a wrong verdict"] = (
             note.strip() != "" and note.strip() in h["reply_text"] and "myrtle" not in hr
             and "jekyll island: allowed" not in hr and "tybee island: allowed" not in hr)
+        NOTES.unlink(missing_ok=True)
+
+        # i. a detect step the checker blocks inside a trip: reported, note held, no crash
+        NOTES.unlink(missing_ok=True)
+        i = _post("Check Myrtle Beach and my password for my trip, and save a note with the results.")
+        held_i = next((p for p in i["pending"] if p.get("kind") == "note"), {})
+        ri = i["reply_text"]
+        checks["i. blocked trip step: Myrtle still reported, blocked step reported with its rule"] = (
+            "Myrtle Beach — allowed (cited)" in ri
+            and "my password — not looked up" in ri and "rule: secret-fields" in ri)
+        checks["i. blocked trip step: note held, not written, and says the step was not looked up"] = (
+            not NOTES.exists() and "my password: NOT LOOKED UP" in held_i.get("note_text", "")
+            and "my password: allowed" not in held_i.get("note_text", "").lower())
+        checks["i. blocked trip step, no Tybee in the trip: the waiting reply never names Tybee"] = (
+            "WAITING for your approval" in ri and "tybee" not in ri.lower())
+        di = _post("decline")
+        checks["i. blocked trip step: decline skips the note, receipted, nothing written"] = (
+            not NOTES.exists() and any(x["type"] == "task_declined" for x in _acts(di)))
         NOTES.unlink(missing_ok=True)
 
         # e. the blocked-step variant: payment blocked, nothing sent, safe steps reported too

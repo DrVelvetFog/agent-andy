@@ -81,6 +81,8 @@ def _note_text(outcomes: list) -> str:
     for place, o in outcomes:
         if o["decision"] in (detect.ANSWERED, detect.ANSWERED_WITH_CAVEAT):
             lines.append(f"- {place}: {_label(o)}. {_details(o)}")
+        elif o.get("evidence_tier") == "not_looked_up":
+            lines.append(f"- {place}: NOT LOOKED UP — {o.get('staging_reason')}")
         else:
             lines.append(f"- {place}: UNVERIFIED — STAGED, not answered. "
                          f"Reason: {o.get('staging_reason', 'needs a human')}")
@@ -104,7 +106,7 @@ def run_trip(chain, message: str, store, strict: bool = False) -> dict:
     # Steps 1..k: detect each place through the existing gate (a read).
     outcomes, any_staged, any_caveat = [], False, False
     for p in places:
-        o = detect.answer(chain, p, strict=strict, store=store)["outcome"]
+        o = detect.outcome_of(detect.answer(chain, p, strict=strict, store=store), p)
         outcomes.append((p, o))
         any_staged = any_staged or o["decision"] == detect.STAGED
         any_caveat = any_caveat or (o["decision"] != detect.STAGED and not _plain(o))
@@ -139,16 +141,22 @@ def _reply(outcomes, blocked_results, note_status, any_staged=True) -> str:
         n += 1
         if o["decision"] in (detect.ANSWERED, detect.ANSWERED_WITH_CAVEAT):
             parts.append(f"{n}) {place} — {_label(o)} (cited). {_details(o)}".rstrip())
+        elif o.get("evidence_tier") == "not_looked_up":
+            parts.append(f"{n}) {place} — not looked up. {o.get('staging_reason')}")
         else:
             parts.append(f"{n}) {place} — staged, unverified (not answered).")
     for b, _v, reason, rule in blocked_results:
         n += 1
         parts.append(f"{n}) {b} — BLOCKED ({rule}): {reason}. Not executed.")
     n += 1
+    # Name Tybee only when Tybee is actually one of this trip's staged places.
+    tybee_staged = any(o["decision"] == detect.STAGED and "tybee" in (o.get("place") or "").lower()
+                       for _, o in outcomes)
+    will_state = ("it will state Tybee as unverified, not allowed" if tybee_staged
+                  else "it will state staged results as not answered, never allowed")
     if note_status == "waiting" and any_staged:
         parts.append(f"{n}) Trip note — WAITING for your approval, because a result is staged. Say "
-                     "“approve” to write it (it will state Tybee as unverified, not allowed), "
-                     "or “decline” to skip it.")
+                     f"“approve” to write it ({will_state}), or “decline” to skip it.")
     elif note_status == "waiting":
         parts.append(f"{n}) Trip note — WAITING for your approval, because a result carries a "
                      "caveat. Say “approve” to write it (the caveat stays in the note), or "

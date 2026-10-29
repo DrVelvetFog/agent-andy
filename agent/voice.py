@@ -184,7 +184,15 @@ def _default_photos() -> list[tuple[str, str, str]]:
     ]
 
 
+def _not_looked_up(o: dict) -> bool:
+    return o.get("evidence_tier") == "not_looked_up"
+
+
 def _detect_reply(o: dict) -> str:
+    if _not_looked_up(o):
+        v = o.get("scope_verdict") or {}
+        return (f"I won't look that up — {v.get('reason')} "
+                f"({v.get('verdict')}, rule: {v.get('rule')}). Nothing was looked up.")
     if o["decision"] in (detect.ANSWERED, detect.ANSWERED_WITH_CAVEAT):
         parts = [f"At {o['place']}: {o['rule_verdict']}."]
         if o.get("conditions"):
@@ -254,10 +262,13 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     intent, arg = route(transcript)
     if intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
-        reply = speak(_detect_reply(res["outcome"]), chain, voice=voice)
+        o = detect.outcome_of(res, arg)
+        reply = speak(_detect_reply(o), chain, voice=voice)
         result = {"intent": "detect", "source": source, "place": arg,
                   "result": res, "reply": reply}
-        if daemon is not None:   # one staged-receipt suggestion, at most, this task
+        # One staged-receipt suggestion, at most, this task — but never an offer to
+        # hold a request the checker itself refused to look up.
+        if daemon is not None and not _not_looked_up(o):
             result["daemon"] = daemon.observe(chain, res, voice_mode=voice)
         return result
     if intent == "witness":
@@ -347,8 +358,9 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         payload = {"intent": "task", "result": res}
     elif intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
-        reply_text = _detect_reply(res["outcome"])
-        daemon_src = res
+        o = detect.outcome_of(res, arg)
+        reply_text = _detect_reply(o)
+        daemon_src = None if _not_looked_up(o) else res   # no offer on a checker-refused lookup
         payload = {"intent": "detect", "place": arg, "result": res}
     elif intent == "witness":
         # In demo mode a "witness what I didn't photograph" attack gets no photos, so

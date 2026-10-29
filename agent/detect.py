@@ -141,6 +141,34 @@ def evaluate_query(place: str, strict: bool = False) -> dict:
     return out
 
 
+def blocked_outcome(place: str, scope: dict | None) -> dict:
+    """The STAGED outcome for a lookup the checker did not allow (block or stage).
+    Nothing was looked up, so there is no verdict and no citation; the staging
+    reason states the checker's verdict, reason, and rule. `scope_verdict` lets a
+    reply say it was the checker that held it, not a missing source."""
+    v = scope or {"verdict": checker.BLOCK, "reason": "no checker verdict — fail closed",
+                  "rule": "missing-verdict"}
+    did = {checker.BLOCK: "blocked", checker.STAGE: "held"}.get(v.get("verdict"), "did not allow")
+    return {
+        "query": place, "matched": False, "place": None, "rule_verdict": None,
+        "evidence_tier": "not_looked_up", "decision": STAGED, "citation": None,
+        "conditions": None, "caveat": None,
+        "staging_reason": (f"The checker {did} this lookup — {v.get('reason')} "
+                           f"({v.get('verdict')}, rule: {v.get('rule')}); nothing was looked up."),
+        "tier2_candidates": [], "tier2_reason": None, "scope_verdict": v,
+    }
+
+
+def outcome_of(res: dict, place: str) -> dict:
+    """The outcome to act on from an answer() result. A lookup the checker did not
+    allow already comes back STAGED; if an outcome ever arrives as None, rebuild it
+    from the scope receipt's verdict — callers never index into None."""
+    if res.get("outcome") is not None:
+        return res["outcome"]
+    scope = ((res.get("scope_receipt") or {}).get("action") or {}).get("verdict")
+    return blocked_outcome(place, scope)
+
+
 def answer(chain, place: str, strict: bool = False, store=None) -> dict:
     """Handle one 'can I detect here?' query as a full, receipted turn.
 
@@ -154,8 +182,10 @@ def answer(chain, place: str, strict: bool = False, store=None) -> dict:
     scope_receipt = chain.append({**action, "verdict": scope})
 
     if scope["verdict"] != checker.ALLOW:
+        # Not looked up — but still a real STAGED outcome, so every caller replies
+        # with the checker's verdict instead of crashing on a missing outcome.
         return {"scope_receipt": scope_receipt, "answer_receipt": None,
-                "outcome": None, "decision": STAGED}
+                "outcome": blocked_outcome(place, scope), "decision": STAGED}
 
     out = evaluate_query(place, strict=strict)
     out["tier2_candidates"] = []
