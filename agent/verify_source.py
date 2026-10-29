@@ -347,4 +347,5 @@ class KnowledgeStore:
                       "place": p["place"], "approved_by": "owner",
                       "approved_on": time.strftime("%Y-%m-%d", time.gmtime())})
         res = tools.run(chain, "note", summary=f"save the {p['place']} to the sandbox", text=p["note_text"])
-        return {"ok": True, "place": p["place"], "kind": "note", "note_written": res["executed"]}
+        return {"ok": True, "place": p["place"], "kind": "note", "note_written": res["executed"],
+                "note_text": p["note_text"]}

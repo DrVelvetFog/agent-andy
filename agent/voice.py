@@ -316,9 +316,12 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             if not res["ok"]:
                 reply_text = f"Nothing to approve — {res['error']}."
             elif res.get("kind") == "note":
-                reply_text = ("Approved — the trip note was written to the sandbox: it states Myrtle "
-                              "Beach allowed with its citation, and Tybee Island unverified and staged, "
-                              "not answered.")
+                # State the note that was actually written — never a fixed list of places.
+                if res.get("note_written"):
+                    reply_text = ("Approved — the trip note was written to the sandbox. It reads: "
+                                  f"{res.get('note_text', '')}")
+                else:
+                    reply_text = "Approved, but the note was not written — the checker held the write."
             else:
                 reply_text = (f"Approved — {res['place']} is now a confirmed secondary answer for this "
                               "session (I read the site, not the ordinance — confirm the primary). Ask me "

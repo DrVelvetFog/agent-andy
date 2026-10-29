@@ -20,6 +20,14 @@ stating Tybee as unverified, never allowed. Driven against the real server.
      reports the safe steps and the blocked step separately.
   f. Verify passes on the live chain; Flip-one-byte fails by receipt number on a
      throwaway copy, the real chain untouched.
+  g. one-place trips for every non-"allowed" Tier 1 verdict (Dauphin Island, Ulysses
+     S. Grant NHS, Honeymoon Island, Lake of the Ozarks, Jekyll Island): the reply and
+     the note state the ACTUAL rule verdict and never the word "allowed"; a plain
+     Tier 1 answer writes the note right away; a caveated answer (Jekyll) holds the
+     note for approval, writes it with the caveat on approve, and skips it on decline.
+  h. a held note for non-rehearsed places (Jekyll Island + Tybee Island), approved:
+     the approval reply quotes the note actually written — Jekyll restricted, Tybee
+     unverified — and never names Myrtle Beach or calls either place allowed.
 
 No new tool is added; detect, echo, and the sandboxed note writer are all that run.
 """
@@ -50,6 +58,21 @@ GUARDED = [ROOT / "data" / "detect_sample.toml", ROOT / "data" / "confirmed_seco
 REQUEST = "Check Myrtle Beach and Tybee Island for my trip, and save a note with the results."
 BLOCKED_REQUEST = ("Check Myrtle Beach and Tybee Island for my trip, and wire $5,000 for the trip, "
                    "and save a note with the results.")
+
+# One-place trips: (place as typed, expected rule_verdict, how the verdict must read,
+# whether the answer carries a caveat and so must hold the note).
+SINGLE_PLACES = [
+    ("Dauphin Island", "restricted", "restricted", False),
+    ("Ulysses S. Grant National Historic Site", "restricted", "restricted", False),
+    ("Honeymoon Island", "limited", "limited", False),
+    ("Lake of the Ozarks", "allowed_with_registration", "registration required", False),
+    ("Jekyll Island", "restricted", "restricted", True),
+]
+JEKYLL_CAVEAT = "not yet been verified by a direct Municode read"
+
+
+def _trip(place):
+    return f"Check {place} for my trip, and save a note with the results."
 
 
 def _post(msg):
@@ -135,6 +158,61 @@ def main() -> int:
         checks["d. decline: a task_declined (skip) receipt lands, reply states the skip"] = (
             any(x["action"]["type"] == "task_declined" for x in d["receipts"])
             and ("skip" in d["reply_text"].lower() or "not written" in d["reply_text"].lower()))
+
+        # g. one-place trips: the actual verdict, never "allowed"; caveat holds the note
+        for place, verdict, label, caveated in SINGLE_PLACES:
+            NOTES.unlink(missing_ok=True)
+            g = _post(_trip(place))
+            acts_g = _acts(g)
+            da = next((x for x in acts_g if x["type"] == "detect_answer"), {})
+            waiting = any(x["type"] == "task_step" and x.get("status") == "waiting" for x in acts_g)
+            reply = g["reply_text"]
+            checks[f"g. {place}: detect answers rule_verdict={verdict}"] = (
+                da.get("decision") in ("answered", "answered_with_caveat")
+                and da.get("rule_verdict") == verdict)
+            checks[f"g. {place}: reply states '{label} (cited)' and never 'allowed'"] = (
+                f"{place} — {label} (cited)" in reply and "allowed" not in reply.lower())
+            if not caveated:
+                note = NOTES.read_text(encoding="utf-8") if NOTES.exists() else ""
+                checks[f"g. {place}: plain Tier 1 answer -> note written right away"] = (
+                    NOTES.exists() and not waiting and g["pending"] == [])
+                checks[f"g. {place}: note states '{label}' with its source, never 'allowed'"] = (
+                    f"{place.lower()}: {label}" in note.lower() and "source:" in note.lower()
+                    and "allowed" not in note.lower())
+                continue
+            # caveated: held before writing, written with the caveat on approve
+            held = next((p for p in g["pending"] if p.get("kind") == "note"), {})
+            checks[f"g. {place}: caveated answer -> note held for approval, not written"] = (
+                waiting and not NOTES.exists() and "caveat" in reply.lower()
+                and JEKYLL_CAVEAT in held.get("note_text", ""))
+            ap = _post("approve")
+            note = NOTES.read_text(encoding="utf-8") if NOTES.exists() else ""
+            checks[f"g. {place}: approve -> note written as '{label}' with the caveat intact"] = (
+                any(x["action"]["type"] == "task_approved" for x in ap["receipts"])
+                and f"{place.lower()}: {label}" in note.lower() and "caveat:" in note.lower()
+                and JEKYLL_CAVEAT in note and "allowed" not in note.lower())
+            NOTES.unlink(missing_ok=True)
+            _post(_trip(place))
+            dc = _post("decline")
+            checks[f"g. {place}: decline -> note skipped, receipted, not written"] = (
+                not NOTES.exists()
+                and any(x["type"] == "task_declined" for x in _acts(dc))
+                and ("skip" in dc["reply_text"].lower() or "not written" in dc["reply_text"].lower()))
+        NOTES.unlink(missing_ok=True)
+
+        # h. approval reply for a non-rehearsed held note states the note actually written
+        NOTES.unlink(missing_ok=True)
+        _post("Check Jekyll Island and Tybee Island for my trip, and save a note with the results.")
+        h = _post("approve")
+        note = NOTES.read_text(encoding="utf-8") if NOTES.exists() else ""
+        hr = h["reply_text"].lower()
+        checks["h. Jekyll + Tybee: the written note states Jekyll restricted and Tybee unverified"] = (
+            "jekyll island: restricted" in note.lower() and "tybee island: unverified" in note.lower()
+            and "jekyll island: allowed" not in note.lower() and "tybee island: allowed" not in note.lower())
+        checks["h. Jekyll + Tybee: approval reply quotes that note, never Myrtle or a wrong verdict"] = (
+            note.strip() != "" and note.strip() in h["reply_text"] and "myrtle" not in hr
+            and "jekyll island: allowed" not in hr and "tybee island: allowed" not in hr)
+        NOTES.unlink(missing_ok=True)
 
         # e. the blocked-step variant: payment blocked, nothing sent, safe steps reported too
         e = _post(BLOCKED_REQUEST)
