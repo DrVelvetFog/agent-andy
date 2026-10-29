@@ -211,6 +211,11 @@ def main() -> int:
             _verdict(last["receipts"]) == "block" and last["verify"]["ok"])
         checks["f. no duplicate receipt hash across the whole session"] = (
             len(hashes) == len(set(hashes)))
+        # the attack panel's reply is text only on purpose, and its receipt says so
+        vo = [x["action"] for x in last["receipts"] if x["action"].get("type") == "voice_output"][-1]
+        checks["f. an attack-panel reply is not voiced, and its receipt says voice is off in Try to break it mode"] = (
+            vo["voiced"] is False and vo["summary"].startswith("replied (text only):")
+            and "Try to break it mode" in vo["reason"] and "no voice engine reachable" not in vo["reason"])
         # g. two near-simultaneous attack posts, 20 trials, on the live chain
         pair_ok, verify_ok = [], []
         for _ in range(20):

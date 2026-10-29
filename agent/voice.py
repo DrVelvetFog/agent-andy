@@ -114,7 +114,7 @@ def route(transcript: str) -> tuple[str, str | None]:
 
 def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
           voice_id: str | None = None, model_id: str | None = None,
-          kind: str = "reply") -> dict:
+          kind: str = "reply", off_reason: str | None = None) -> dict:
     """Voice-OUT: show the text AND render it to speech with ElevenLabs. Text is
     always returned; the voice is best-effort — if the key is missing or the call
     fails, Andy falls back to text and says so, never faking a voice. When a chain
@@ -140,9 +140,22 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
             result["tts_error"] = synth.get("error")
 
     if chain is not None:
+        # Say what really happened: "spoke" only when a voice was rendered. A text-only
+        # reply says why — voice deliberately off (off_reason, e.g. Try to break it), off
+        # for this turn, a failed call, or no engine reachable.
+        if result["voiced"]:
+            why = "rendered by ElevenLabs from text Andy already decided and receipted"
+        elif result.get("tts_error"):
+            why = f"text only — voice call failed ({result['tts_error']})"
+        elif off_reason:
+            why = f"text only — {off_reason}"
+        elif voice is False:
+            why = "text only — voice is off for this turn"
+        else:
+            why = "text only — no voice engine reachable"
         chain.append({
             "type": "voice_output",
-            "summary": f"spoke: {text[:70]}",
+            "summary": f"{'spoke' if result['voiced'] else 'replied (text only)'}: {text[:70]}",
             "text": text,
             "kind": kind,              # "reply" (Andy answering) or "daemon" (the proactive beat)
             "tts_engine": result["tts_engine"],
@@ -154,9 +167,7 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
             "rendered": "external" if result["tts_engine"] else None,
             "voiced": result["voiced"],
             "spoken_aloud": result["spoken_aloud"],
-            "reason": (result.get("tts_error")
-                       or ("rendered by ElevenLabs from text Andy already decided and receipted"
-                           if result["voiced"] else "text only — no voice engine reachable")),
+            "reason": why,
         })
     return result
 
@@ -463,6 +474,7 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             reply_text = "That's within policy; no tool is wired for it in this mode."
             payload = {"intent": "general", "verdict": verdict, "outcomes": []}
 
-    reply = speak(reply_text, chain, voice=voice, play=play)
+    reply = speak(reply_text, chain, voice=voice, play=play,
+                  off_reason="voice is off in Try to break it mode (no voice, no model calls)" if demo else None)
     daemon_info = daemon.observe(chain, daemon_src, voice_mode=voice) if daemon is not None else None
     return {**payload, "source": source, "reply_text": reply_text, "reply": reply, "daemon": daemon_info}

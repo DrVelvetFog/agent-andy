@@ -81,6 +81,28 @@ def main() -> int:
     print(f"  e. spoken C2      -> {e_gate['verdict'].get('verdict')} ({e_gate['verdict'].get('rule')})")
     print(f"  w. spoken witness+money -> {w['intent']}, SAM calls={len(sam)}")
 
+    # A voice_output receipt says what really happened: "spoke" only when voiced,
+    # otherwise "replied (text only)" with the true reason. ElevenLabs is stubbed here.
+    real_avail, real_synth = voice.tts.available, voice.tts.synthesize
+    ok_synth = lambda text, **k: {"ok": True, "tts_engine": "elevenlabs", "audio_path": "runs/voice-out/x.mp3",
+                                  "audio_sha256": "a" * 64, "voice_id": "v", "model_id": "eleven_v4", "char_count": 5}
+    try:
+        voice.tts.available, voice.tts.synthesize = (lambda: True), ok_synth
+        voice.speak("hello", chain, voice="auto")
+        r_voiced = chain.receipts()[-1]["action"]
+        voice.tts.synthesize = lambda text, **k: {"ok": False, "tts_engine": None, "error": "HTTP 401: unauthorized"}
+        voice.speak("hello", chain, voice=True)
+        r_failed = chain.receipts()[-1]["action"]
+        voice.tts.available = lambda: False
+        voice.speak("hello", chain, voice="auto")
+        r_nokey = chain.receipts()[-1]["action"]
+    finally:
+        voice.tts.available, voice.tts.synthesize = real_avail, real_synth
+    voice.speak("hello", chain, voice=False)
+    r_off = chain.receipts()[-1]["action"]
+    voice.speak("hello", chain, voice=False, off_reason="voice is off in Try to break it mode")
+    r_demo = chain.receipts()[-1]["action"]
+
     receipts = chain.receipts()
     voice_inputs = [r for r in receipts if r["action"].get("type") == "voice_input"]
     detect_answers = [r for r in receipts if r["action"].get("type") == "detect_answer"]
@@ -111,6 +133,16 @@ def main() -> int:
         "h) a plain spoken 'hello' is allowed through to the gated loop": (
             h["intent"] == "general" and gate_of(-1)["verdict"].get("verdict") == "allow"),
         "chain verifies end to end": ok,
+        "voice_output: 'spoke' only when voiced (stubbed ElevenLabs), with the rendered reason": (
+            r_voiced["voiced"] and r_voiced["summary"].startswith("spoke:")
+            and r_voiced["reason"].startswith("rendered by ElevenLabs")),
+        "voice_output: text-only replies say 'replied (text only)' and the TRUE reason": (
+            all(not r["voiced"] and r["summary"].startswith("replied (text only):")
+                for r in (r_failed, r_nokey, r_off, r_demo))
+            and r_failed["reason"] == "text only — voice call failed (HTTP 401: unauthorized)"
+            and r_nokey["reason"] == "text only — no voice engine reachable"
+            and r_off["reason"] == "text only — voice is off for this turn"
+            and r_demo["reason"] == "text only — voice is off in Try to break it mode"),
     }
     if photos_ready:
         witness_obs = [r for r in receipts if r["action"].get("type") == "witness_observation"]

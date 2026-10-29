@@ -389,7 +389,10 @@ function classify(a) {
   if (t === 'task_step') return { tier: 'stage', label: 'STEP · WAITING', reason: 'note held for your approval (depends on a staged result)' };
   if (t === 'task_approved') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — note written to the sandbox' };
   if (t === 'task_declined') return { tier: 'neutral', label: 'SKIPPED', reason: 'owner declined — note skipped, not written' };
-  if (t === 'voice_output') return { tier: 'plan', label: a.kind === 'daemon' ? 'DAEMON SPOKE' : 'SPOKE', reason: a.tts_engine ? 'voice: ' + a.tts_engine : 'text only' };
+  // SPOKE only when a voice was really rendered; otherwise TEXT ONLY, with the receipt's own reason.
+  if (t === 'voice_output') return { tier: 'plan',
+    label: (a.kind === 'daemon' ? 'DAEMON ' : '') + (a.voiced ? 'SPOKE' : 'TEXT ONLY'),
+    reason: a.tts_engine ? 'voice: ' + a.tts_engine : (a.reason || 'text only') };
   if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
   if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || '') };
   if (t === 'plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || '' };
