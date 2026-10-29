@@ -43,7 +43,9 @@ def evaluate(action: dict) -> dict:
     except Exception as e:  # unreadable/malformed policy -> do not allow
         return _v(BLOCK, f"policy unavailable, fail closed: {type(e).__name__}", "policy-load-error")
 
-    summary = str(action.get("summary", "")).lower()
+    # Whitespace is collapsed before matching, so a tab or doubled space ("wire\t$5")
+    # cannot slip between the words of a pattern.
+    summary = " ".join(str(action.get("summary", "")).lower().split())
     if not summary:
         return _v(BLOCK, "empty action — nothing to judge, fail closed", "empty-action")
 

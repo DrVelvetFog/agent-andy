@@ -31,6 +31,7 @@ import uuid
 from pathlib import Path
 
 from . import checker, detect, loop, policy, task, tier2, tts, witness
+from .verify_source import _norm as _norm_place
 
 LIVE = "live-transcribe"
 INJECTED = "transcript-injected"
@@ -80,22 +81,23 @@ _DETECT_RE = re.compile(
 _WITNESS_RE = re.compile(r"\b(witness|packing list|packing-list|pack(?:ed)?\s+(?:my|the)\s+box)\b", re.IGNORECASE)
 # verify-on-demand: "verify it" / "verify <place>", and the owner's approval
 _VERIFY_RE = re.compile(r"\bverif(?:y|ies|ied)\b", re.IGNORECASE)
-_APPROVE_RE = re.compile(r"^\s*(?:yes|approve|confirm)\b", re.IGNORECASE)
-_DECLINE_RE = re.compile(r"\b(?:declin(?:e|ed|es)|reject(?:ed|s)?)\b", re.IGNORECASE)
+# Approve / decline are a leading word plus, at most, the name of the pending item —
+# "yes", "approve Daytona Beach", "decline". Whether the rest really names a pending
+# item is decided in chat_turn, which has the store; anything else is not an approval.
+_APPROVE_RE = re.compile(r"^\s*(?:yes|approve|confirm)\b[\s,:]*(.*?)[\s.!?]*$", re.IGNORECASE | re.S)
+_DECLINE_RE = re.compile(r"^\s*(?:decline|reject)\b[\s,:]*(.*?)[\s.!?]*$", re.IGNORECASE | re.S)
 
 
 def route(transcript: str) -> tuple[str, str | None]:
     """Deterministic intent routing for the known commands; everything else falls
     through to the Spark gated loop."""
     t = transcript.strip()
-    if _APPROVE_RE.search(t):
-        m = re.search(r"(?:approve|confirm)\s+(.*)", t, re.IGNORECASE)
-        arg = m.group(1).strip().rstrip("?.! ") if m and m.group(1).strip() else None
-        return "approve", arg
-    if _DECLINE_RE.search(t):
-        m = re.search(r"(?:decline|reject)\s+(.*)", t, re.IGNORECASE)
-        arg = m.group(1).strip().rstrip("?.! ") if m and m.group(1).strip() else None
-        return "decline", arg
+    m = _APPROVE_RE.match(t)
+    if m:
+        return "approve", (m.group(1).strip() or None)
+    m = _DECLINE_RE.match(t)
+    if m:
+        return "decline", (m.group(1).strip() or None)
     if _VERIFY_RE.search(t):
         m = re.search(r"verif(?:y|ies|ied)\s+(?:detecting\s+(?:at|in|on)\s+)?(.*)", t, re.IGNORECASE)
         arg = m.group(1).strip().rstrip("?.! ") if m else ""
@@ -241,6 +243,44 @@ def _verify_candidate(chain, place, store) -> dict:
     return {"ok": True, "proposal": p, "reply": reply}
 
 
+def _raw_verdict(message: str) -> dict:
+    """Checker first: the policy engine rules on the RAW message before any intent
+    runs, so no message shape (approve, verify, task, detect, witness) skips it."""
+    return checker.evaluate({"type": "tool", "tool": "chat_request", "summary": message})
+
+
+def _gate(chain, message: str, intent: str, verdict: dict) -> tuple[dict, dict]:
+    """Receipt the raw-message verdict as a chat_request, with the intent it was
+    routed to. The gate itself never executes anything."""
+    action = {"type": "tool", "tool": "chat_request", "summary": message}
+    cite = policy.cite_for(verdict)   # citation only — never changes the verdict
+    receipt = chain.append({**action, "verdict": verdict, "executed": False, "routed_intent": intent,
+                            "cited_policy": cite["cited"], "cited_source": cite["source"],
+                            "policy_conflict": cite["conflict"]})
+    return cite, receipt
+
+
+def _refusal(verdict: dict, cite: dict, receipt: dict) -> str:
+    text = (f"I won't do that — {verdict['reason']} "
+            f"({verdict['verdict']}, rule: {verdict['rule']}).")
+    # Order: policy reason (above), then the standing-policy line, then the
+    # receipt reference — shown only when a seeded line actually matches.
+    if cite["cited"]:
+        text += (f" Your standing policy: “{cite['cited']}” "
+                 f"({cite['source']}). Receipt {receipt['hash'][:12]}…")
+    elif cite["conflict"]:
+        text += f" (Note: {cite['conflict']}.)"
+    return text
+
+
+def _names_pending(store, arg) -> bool:
+    """An approve/decline fires only as a bare word or followed by exactly the name
+    of an item that is pending — never from a sentence that merely starts with yes."""
+    if store is None or arg is None:
+        return True   # bare word: the handler itself reports nothing/too much pending
+    return _norm_place(arg) in store.pending
+
+
 def handle(chain, transcript: str, source: str, photos=None, strict: bool = False,
            voice: str | bool = "auto", daemon=None, store=None) -> dict:
     """Route one transcript (live or injected) through the gated paths. The
@@ -260,6 +300,15 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     })
 
     intent, arg = route(transcript)
+    if intent not in ("detect", "witness"):
+        intent = "general"   # voice has no approve/verify/task handlers: the Spark loop
+    verdict = _raw_verdict(transcript)
+    cite, gate = _gate(chain, transcript, intent, verdict)
+    # A blocked transcript runs nothing; a staged one runs only an intent that keeps
+    # its own gate (detect scope, witness checklist) — never the open-ended loop.
+    if verdict["verdict"] == checker.BLOCK or (intent == "general" and verdict["verdict"] != checker.ALLOW):
+        return {"intent": "general", "source": source, "verdict": verdict, "executed": False,
+                "reply": speak(_refusal(verdict, cite, gate), chain, voice=voice)}
     if intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
         o = detect.outcome_of(res, arg)
@@ -290,12 +339,15 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     """One TYPED chat message through the SAME gate as spoken input.
 
     The input is receipted as `chat_input` with source `typed` — never dressed up
-    as a voice transcription. It routes exactly like a spoken request: detect
-    (Form 2) or witness, or, for anything else, the policy engine rules on the raw
-    request directly — an off-scope message (exfiltration, money, a secret field,
-    about a person) is BLOCKED, receipted, and never run; an allowed one goes to
-    the Spark loop. Nothing reaches a tool without a receipt in front of it. A
-    daemon, if given, may then surface ONE suggestion after a staged result.
+    as a voice transcription. CHECKER FIRST: the policy engine rules on the raw
+    message before any intent runs. A blocked message (exfiltration, money, a
+    secret field, about a person, a gate override) is refused, receipted, and runs
+    nothing — not approve, verify, task, detect, or witness, and no SAM call. An
+    allowed or staged one goes to its intent handler, which keeps its own gate;
+    approve/decline must be exact (a bare word, or the pending item's name), and a
+    staged message never approves. General chat that is allowed goes to the Spark
+    loop, where every proposed step is checked again. A daemon, if given, may then
+    surface ONE suggestion after a staged result.
     """
     if demo:
         # "Try to break it" mode: the SAME checker and receipts as normal chat, with
@@ -313,6 +365,13 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     })
 
     intent, arg = route(message)
+    verdict = _raw_verdict(message)
+    if verdict["verdict"] == checker.BLOCK:
+        intent = "general"   # refused below: no intent runs
+    elif intent in ("approve", "decline") and (
+            verdict["verdict"] != checker.ALLOW or not _names_pending(store, arg)):
+        intent = "general"   # not an exact approval/decline — the raw verdict stands
+    cite, gate = _gate(chain, message, intent, verdict)
     daemon_src = None
     if intent == "verify":
         res = _verify_candidate(chain, arg, store)
@@ -376,22 +435,8 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             reply_text = f"Not shipped — unverified: {', '.join(fin['unverified_items'])}."
         payload = {"intent": "witness", "result": fin}
     else:
-        action = {"type": "tool", "tool": "chat_request", "summary": message}
-        verdict = checker.evaluate(action)
-        cite = policy.cite_for(verdict)   # citation only — never changes the verdict
-        receipt = chain.append({**action, "verdict": verdict, "executed": False,
-                                "cited_policy": cite["cited"], "cited_source": cite["source"],
-                                "policy_conflict": cite["conflict"]})
         if verdict["verdict"] != checker.ALLOW:
-            reply_text = (f"I won't do that — {verdict['reason']} "
-                          f"({verdict['verdict']}, rule: {verdict['rule']}).")
-            # Order: policy reason (above), then the standing-policy line, then the
-            # receipt reference — shown only when a seeded line actually matches.
-            if cite["cited"]:
-                reply_text += (f" Your standing policy: “{cite['cited']}” "
-                               f"({cite['source']}). Receipt {receipt['hash'][:12]}…")
-            elif cite["conflict"]:
-                reply_text += f" (Note: {cite['conflict']}.)"
+            reply_text = _refusal(verdict, cite, gate)
             payload = {"intent": "general", "verdict": verdict, "executed": False, "cite": cite}
         elif run_general:
             try:

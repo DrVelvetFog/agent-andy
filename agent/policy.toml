@@ -11,6 +11,8 @@
 #   any     substrings matched case-insensitively against the action summary;
 #           any one match fires the rule
 #
+# The summary is lower-cased and its whitespace collapsed before matching.
+#
 # Rules are evaluated top to bottom, FIRST MATCH WINS. List block rules before
 # stage rules so the stricter outcome wins when an action trips both. Anything
 # that matches no rule falls through to the default tier.
@@ -20,6 +22,9 @@
 # property we want for a live demo, not a limitation to apologise for.
 
 version = 1
+# Unmatched text stays ALLOW on purpose: ordinary conversation ("hello", "what can
+# you do?") must reach the Spark loop, where every step the planner proposes is
+# checked again on its own before it runs. The rules below are the first check.
 default_tier = "allow"
 default_reason = "within policy scope — safe local action in the active task"
 
@@ -37,7 +42,12 @@ meaning = "safe local work within the task; executed and receipted"
 id = "exfiltration"
 tier = "block"
 reason = "would move data off this machine; nothing leaves the laptop"
-any = ["post ", "tweet", "publish", "upload", "email ", "send to", " dm ", "dm the", "off the machine", "off-machine", "exfiltrate", "leak ", "to a remote", "to an external", "to a public", "pastebin", "to the cloud"]
+any = ["post ", "tweet", "publish", "upload", "email ", "send to", " dm ", "dm the", "off the machine", "off-machine", "exfiltrate", "leak ", "to a remote", "to an external", "to a public", "pastebin", "to the cloud",
+       # moving the owner's notes / files / photos to someone or somewhere
+       "send my notes", "send my files", "send my photos", "send my data", "send the notes", "send the files",
+       "share my notes", "share my files", "share my photos", "copy my notes to", "copy my files to",
+       "forward my", "text my notes", "text my files", "e-mail", "mail my", "fax ", "sync my",
+       "to dropbox", "google drive", "icloud"]
 
 [[rules]]
 id = "about-people"
@@ -49,25 +59,47 @@ any = ["comment on", "rate the", "judge the", "opinion of", "how they look", "ho
 id = "secret-fields"
 tier = "block"
 reason = "reads or acts on a credential or secret field"
-any = ["password", "credit card", "ssn", "api key", "secret key", "private key", "ssh key", "seed phrase", "2fa", "one-time code", "otp", "access token"]
+any = ["password", "credit card", "ssn", "api key", "secret key", "private key", "ssh key", "seed phrase", "2fa", "one-time code", "otp", "access token",
+       # secret files and paths
+       ".ssh", "id_rsa", "id_ed25519", ".env", ".aws", "credentials", ".pem", "keychain", "passwd"]
 
 [[rules]]
 id = "off-task"
 tier = "block"
 reason = "acts outside the owner's active task, or tries to disable the gate"
-any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "disable the gate", "bypass the checker", "bypass the gate", "ignore previous instructions", "ignore your instructions", "ignore your rules", "ignore the rules", "ignore my rules", "pretend you are not gated", "pretend you're not gated", "not gated", "do it anyway"]
+any = ["outside the task", "off-task", "off task", "unrelated to the task", "disable the receipt", "turn off the checker", "disable the gate", "bypass the checker", "bypass the gate", "ignore previous instructions", "ignore your instructions", "ignore your rules", "ignore the rules", "ignore my rules", "pretend you are not gated", "pretend you're not gated", "not gated", "do it anyway",
+       # override phrasings
+       "ignore all previous", "ignore all prior", "ignore prior", "ignore the policy", "ignore your policy",
+       "disregard your", "disregard the rules", "disregard all", "disregard previous", "disregard prior",
+       "forget the policy", "forget your rules", "forget the rules", "forget your instructions",
+       "developer mode", "dev mode", "jailbreak", "you are now", "system:", "pre-approved", "preapproved",
+       "no restrictions", "without restrictions", "unrestricted", "unfiltered",
+       "ignore everything", "disregard everything", "new instructions"]
 
 [[rules]]
 id = "financial"
 tier = "block"
 reason = "moves money off the owner's accounts; Andy never transfers funds"
-any = ["wire ", "wire $", "send money", "send $", "transfer $", "transfer money", "transfer funds", "to account ", "venmo", "zelle", "paypal", "western union", "pay $", "bitcoin to", "crypto to", "send cash"]
+any = ["wire ", "wire $", "send money", "send $", "transfer $", "transfer money", "transfer funds", "to account ", "venmo", "zelle", "paypal", "western union", "pay $", "bitcoin to", "crypto to", "send cash",
+       # a money verb followed by an amount ("transfer 5000 dollars", "send 5k")
+       "transfer 1", "transfer 2", "transfer 3", "transfer 4", "transfer 5", "transfer 6", "transfer 7", "transfer 8", "transfer 9",
+       "send 1", "send 2", "send 3", "send 4", "send 5", "send 6", "send 7", "send 8", "send 9",
+       "pay 1", "pay 2", "pay 3", "pay 4", "pay 5", "pay 6", "pay 7", "pay 8", "pay 9",
+       "wire 1", "wire 2", "wire 3", "wire 4", "wire 5", "wire 6", "wire 7", "wire 8", "wire 9",
+       # other money apps, coins, and destinations
+       "cash app", "cashapp", "usdc", "usdt", "to 0x", "of bitcoin", "buy bitcoin", "buy $", "move $",
+       "pay my ", "transfer to", "to my savings", "to my checking", "to my account", "to his account",
+       "to her account", "to their account"]
 
 [[rules]]
 id = "system-command"
 tier = "block"
 reason = "runs shell or system commands outside Andy's tools; off-scope and unsafe"
-any = ["sudo", "rm -rf", "curl ", "wget ", "| sh", "| bash", "bash -c", "chmod ", "/etc/", "reverse shell", "nc -", "powershell", "run the installer"]
+any = ["sudo", "rm -rf", "curl ", "wget ", "| sh", "| bash", "bash -c", "chmod ", "/etc/", "reverse shell", "nc -", "powershell", "run the installer",
+       # shells, root, and reading files off disk
+       "su root", "su -", "cat ~", "cat /", "cat .", "|sh", "|bash", "run bash", "terminal", "ssh ",
+       "python -c", "os.system", "subprocess", "exec(", "eval(", "shutdown", "reboot", "kill -9", "killall",
+       "crontab", "launchctl"]
 
 [[rules]]
 id = "destructive"

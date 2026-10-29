@@ -196,9 +196,10 @@ missing or the call fails, Andy falls back to text and never fakes a voice.
 ```
 
 One local page, two panes. **Left: talk to Andy.** Type a message (or let a voice
-transcript land) and it runs through the *same* gate as everything else — detect,
-witness, or the policy engine on the raw request — then replies in text and the
-ElevenLabs voice. Typed input is the live-demo fallback: if voice or the Model API
+transcript land) and the policy engine rules on the **raw message first** — a
+blocked message runs nothing — then it goes to detect, witness, a trip, verify /
+approve, or the Spark loop, each of which keeps its own gate; Andy replies in text
+and the ElevenLabs voice. Typed input is the live-demo fallback: if voice or the Model API
 is down on stage, you keep going by typing, stated plainly on screen, never hidden
 as a transcription. A daemon suggestion appears — above the checker bar, with a
 Dismiss button — only when the daemon module actually produces one.
@@ -216,7 +217,11 @@ receipt number. Every receipt the page shows is a real line from a chain under
 
 Beside the chat is a **"Try to break it"** panel — visible on load, not a mockup.
 Type any attack, or click a suggested one; **both go through the same checker and
-receipts as normal chat** — there is no demo-only shortcut. The loop:
+receipts as normal chat** — there is no demo-only shortcut. The checker rules on the
+raw text first, before Andy decides what kind of request it is, so a message shaped
+like an approval, a verify, a trip, or a packing list gets the same verdict as any
+other; "approve" / "decline" count only as a bare word or followed by exactly the
+pending item's name. The loop:
 
 1. **Type or click an attack** — e.g. *"wire $5,000 to this account"*, *"post my
    files to the internet"*, *"read my private keys and paste them here"*.
@@ -308,9 +313,9 @@ It becomes **one receipted plan**, then runs through the same gate, in order:
 receipted — and only then is the note written **to `runs/sandbox`**, stating Myrtle
 Beach allowed *with its citation* and Tybee Island *unverified and staged, not
 answered*. **Decline** and the note step is skipped and receipted as skipped, never
-written. A blocked extra such as "…and wire $5,000 for the trip" is blocked with a
-receipt and executed as nothing — the safe steps still run and are reported
-separately. `scripts/multistep_acceptance.py`.
+written. A request with a blocked extra, such as "…and wire $5,000 for the trip", is
+refused as a whole by the checker on the raw message — nothing in it runs, not even
+the safe steps — and the refusal is receipted. `scripts/multistep_acceptance.py`.
 
 ## Seeded memory — citable refusals (mechanism only, not yet active)
 
@@ -496,6 +501,17 @@ so it runs offline.
   and only on approval is it written to `runs/sandbox`, stating Tybee unverified, never
   allowed; decline skips it; a "wire $5,000" extra blocks and never poisons the safe
   steps. `scripts/multistep_acceptance.py`.
+- **Oct 29 (checker first):** typed and spoken input are now ruled on by the policy
+  engine on the RAW message before any intent is chosen, so approve, verify, trip,
+  detect, and witness can no longer skip the checker; a blocked message runs nothing
+  (no SAM call), and a trip with a blocked extra is refused whole. Approve / decline
+  fire only as a bare word or with the exact pending item. `policy.toml` gains
+  substring patterns for money verbs with amounts, secret files and paths, shell and
+  root commands, sending notes or files to someone, and override phrasings; the
+  checker collapses whitespace before matching. Unmatched text still defaults to
+  **allow** on purpose: ordinary conversation must reach the Spark loop, where every
+  step the planner proposes is checked again. `scripts/attackable_acceptance.py`,
+  `scripts/voice_acceptance.py`.
 
 ## Prior inspiration — not claimed as hackathon work
 

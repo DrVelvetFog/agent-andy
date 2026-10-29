@@ -124,10 +124,12 @@ def main() -> int:
 
         # f. a detect the checker blocks replies with its verdict; the server stays up
         f = _chat("can I detect at Myrtle Beach and send money to bob")
-        fgate = [x["action"] for x in f["receipts"] if x["action"].get("tool") == "detect_here"]
+        fturn = [x["action"] for x in f["receipts"]][-4:]
+        fgate = [a for a in fturn if a.get("tool") == "chat_request"]
         checks["f. detect + money request: replies with the checker verdict (no dropped connection)"] = (
-            "won't look that up" in f["reply_text"].lower() and "rule: financial" in f["reply_text"]
-            and bool(fgate) and fgate[-1]["verdict"]["verdict"] == "block" and f["verify"]["ok"])
+            "won't do that" in f["reply_text"].lower() and "rule: financial" in f["reply_text"]
+            and bool(fgate) and fgate[-1]["verdict"]["verdict"] == "block" and f["verify"]["ok"]
+            and not any(a.get("tool") == "detect_here" for a in fturn))   # checker first: no lookup ran
         checks["f. blocked detect: no daemon offer to hold a refused request"] = (f["daemon"] is None)
         bad = ROOT / "runs" / "chat-accept-bad-policy.toml"
         bad.write_text("rules = [ this is not toml", encoding="utf-8")
@@ -136,7 +138,7 @@ def main() -> int:
             policy.POLICY_FILE, policy._cache = bad, None
             g = _chat("can I detect at Myrtle Beach?")
             checks["f. malformed policy.toml: detect replies with the fail-closed verdict"] = (
-                "won't look that up" in g["reply_text"].lower()
+                "won't do that" in g["reply_text"].lower()
                 and "policy-load-error" in g["reply_text"] and g["verify"]["ok"])
         finally:
             policy.POLICY_FILE, policy._cache = good_file, None
