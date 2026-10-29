@@ -77,6 +77,14 @@ def _run(launcher: Path, timeout=20):
 
 
 def main() -> int:
+    # Prerequisite: the bundle must exist. A missing .app is a FAIL with its reason —
+    # never a crash, and never a pass for an app that was never built.
+    if not (APP.is_dir() and LAUNCHER.is_file() and PLIST.is_file()):
+        print(f"  [FAIL] AgentAndy.app not built — {APP.relative_to(ROOT)} is missing or incomplete; "
+              "run `bash scripts/build_mac_app.sh` first. No launcher check ran.")
+        print("\nMAC APP LAUNCHER (headless) ACCEPTANCE: FAIL (.app not built)")
+        return 1
+
     # Clean slate: no stray viewer, port free.
     subprocess.run(["pkill", "-f", "andy_viewer.py"], capture_output=True)
     checks = {}

@@ -14,6 +14,11 @@ PASS means all of these hold:
 
 Makes one live Spark call (MODEL_API_KEY required). The checker is a local,
 deterministic policy engine, so no other network is needed.
+
+If Spark is not reached (no key, no network) or its reply can't be parsed, the
+brain falls back to a local echo plan. The suite then says FALLBACK in its output
+and exits 3, PASS-BY-FALLBACK: the gate, receipts, and verifier were checked, but
+not a Spark plan. Only a run where Spark really proposed the plan exits 0.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agent import loop, tools  # noqa: E402
+from agent import brain, loop, tools  # noqa: E402
 from receipts import ReceiptChain, verify_chain  # noqa: E402
 
 RUNS = ROOT / "runs"
@@ -42,6 +47,24 @@ def _show(tag: str, o: dict) -> None:
     )
 
 
+# Watch the one Spark call, without changing it: did Spark actually answer?
+_SPARK = {"answered": False, "error": None}
+_real_post = brain._post_responses
+
+
+def _spy_post(*args, **kwargs):
+    try:
+        out = _real_post(*args, **kwargs)
+    except Exception as e:
+        _SPARK["error"] = f"{type(e).__name__}: {e}"
+        raise
+    _SPARK["answered"] = True
+    return out
+
+
+brain._post_responses = _spy_post
+
+
 def main() -> int:
     RUNS.mkdir(exist_ok=True)
     CHAIN.unlink(missing_ok=True)
@@ -51,8 +74,21 @@ def main() -> int:
     # 1. Full turn from text input: Spark plans, the checker gates each step.
     utterance = "Make a note that the spare house key is in the blue flowerpot, then tell me it's done."
     print(f'OWNER: "{utterance}"\n')
-    print("TURN — Spark proposed a plan; every step gated before it could run:")
     outcomes = loop.run_turn(chain, utterance)
+    plan = next((r["action"]["steps"] for r in chain.receipts() if r["action"].get("type") == "plan"), [])
+    echo_plan = (len(plan) == 1 and plan[0]["tool"] == "echo"
+                 and plan[0]["summary"].startswith("echo the request:"))
+    if not _SPARK["answered"]:
+        fallback = f"Spark was not called successfully ({_SPARK['error']}); echo was used"
+    elif echo_plan:
+        fallback = "Spark answered but its plan could not be used; echo was used"
+    else:
+        fallback = None
+    if fallback:
+        print(f"FALLBACK: {fallback} — the plan below is the local echo fallback, NOT a Spark plan.")
+        print("TURN — echo fallback plan; every step still gated before it could run:")
+    else:
+        print("TURN — Spark proposed a plan; every step gated before it could run:")
     for o in outcomes:
         _show("turn", o)
 
@@ -100,6 +136,10 @@ def main() -> int:
     for label, passed in checks.items():
         print(f"  [{'PASS' if passed else 'FAIL'}] {label}")
 
+    if all(checks.values()) and fallback:
+        print(f"\nGATED-LOOP ACCEPTANCE: PASS-BY-FALLBACK — {fallback}. The gate, receipts, and "
+              "verifier passed on the echo plan; Spark planning was NOT tested. Not a clean pass.")
+        return 3
     if all(checks.values()):
         print("\nGATED-LOOP ACCEPTANCE: PASS")
         return 0
