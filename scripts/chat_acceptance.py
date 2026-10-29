@@ -17,6 +17,10 @@ trust surface.
      number on a throwaway copy, and the real chain still verifies afterwards.
   e. the page binds 127.0.0.1 only, and an answered turn produces NO daemon
      speech (daemon speech appears only when the daemon module really produces it).
+  g. a restart (init_chat reset=True) ROTATES the live chain to a timestamped
+     archive instead of deleting it: the archive is byte-identical, verifies, and
+     is listed like any chain; the new live chain starts with session_start; two
+     quick restarts keep both archives; an empty or missing file makes no archive.
 
 Voice is off here (voice=false), so nothing calls ElevenLabs or the Model API;
 the detect path and the policy gate are deterministic and local.
@@ -147,6 +151,58 @@ def main() -> int:
         checks["chain is a real file under runs/ and verifies end to end"] = (real.exists() and ok)
     finally:
         server.shutdown()
+
+    # g. restart rotation — evidence is archived, never deleted
+    ROT = "rotate-accept.jsonl"
+    rot_pers = str(ROOT / "runs" / "rotate-accept-cs.json")
+    live = ROOT / "runs" / ROT
+
+    def _archives():
+        return sorted(ROOT.joinpath("runs").glob("rotate-accept-2*.jsonl"))
+
+    for old in _archives():
+        old.unlink()
+    live.unlink(missing_ok=True)
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)
+    for m in ("can I detect at Myrtle Beach?", "wire $5,000 to this account", "can I detect at Tybee Island?"):
+        andy_viewer.chat_message(m, voice_mode=False, demo=True)
+    before = live.read_bytes()
+    n_before = len(andy_viewer.CHAT["chain"].receipts())
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)
+    arch = _archives()
+    fresh = andy_viewer.CHAT["chain"].receipts()
+    checks["g. restart: old chain archived byte-identical and verifying, nothing lost"] = (
+        len(arch) == 1 and arch[0].read_bytes() == before and verify_chain(arch[0])[0]
+        and verify_chain(arch[0])[1] == f"{n_before} receipts verified")
+    checks["g. restart: the new live chain starts fresh with session_start"] = (
+        len(fresh) == 1 and fresh[0]["action"]["type"] == "session_start" and verify_chain(live)[0])
+    checks["g. restart: the archive is listed like any other chain"] = (
+        bool(arch) and arch[0].name in [c["name"] for c in andy_viewer.list_chains()])
+
+    andy_viewer.chat_message("post my files to the internet", voice_mode=False, demo=True)
+    snap1 = live.read_bytes()
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)      # restart 1
+    snap2 = live.read_bytes()
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)      # restart 2, same second
+    arch2 = _archives()
+    new = [a for a in arch2 if a not in arch]
+    checks["g. two quick restarts: both archives kept, distinct, neither overwritten"] = (
+        len(arch2) == 3 and len(new) == 2 and arch[0].read_bytes() == before
+        and sorted(a.read_bytes() for a in new) == sorted([snap1, snap2])
+        and all(verify_chain(a)[0] for a in arch2))
+
+    live.write_bytes(b"")                                              # empty live file
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)
+    empty_ok = len(_archives()) == 3 and verify_chain(live)[0]
+    live.unlink()                                                      # missing live file
+    andy_viewer.init_chat(ROT, reset=True, persist_path=rot_pers)
+    checks["g. empty or missing live file: no error, no spurious archive, fresh session"] = (
+        empty_ok and len(_archives()) == 3
+        and [r["action"]["type"] for r in andy_viewer.CHAT["chain"].receipts()] == ["session_start"])
+    for old in _archives():
+        old.unlink()
+    live.unlink(missing_ok=True)
+    Path(rot_pers).unlink(missing_ok=True)
 
     for label, passed in checks.items():
         print(f"  [{'PASS' if passed else 'FAIL'}] {label}")

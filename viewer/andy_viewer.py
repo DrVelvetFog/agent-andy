@@ -25,6 +25,7 @@ import argparse
 import json
 import sys
 import tempfile
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -53,14 +54,33 @@ PAGE = Path(__file__).resolve().parent / "index.html"
 CHAT: dict = {"chain_name": "chat-live.jsonl", "chain": None, "daemon": None, "store": None}
 
 
+def _rotate(path: Path) -> Path | None:
+    """Move a non-empty chain aside to a timestamped archive in the same directory
+    (chat-live-YYYYMMDD-HHMMSS.jsonl, UTC, then -1, -2, … if taken) and return it.
+    The bytes are untouched, so the archive still verifies, and it stays listable
+    like any other chain. Never overwrites an archive. A missing or empty file is
+    left alone and returns None."""
+    if not path.exists() or path.stat().st_size == 0:
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    dest, n = path.with_name(f"{path.stem}-{stamp}{path.suffix}"), 0
+    while dest.exists():
+        n += 1
+        dest = path.with_name(f"{path.stem}-{stamp}-{n}{path.suffix}")
+    path.rename(dest)
+    return dest
+
+
 def init_chat(chain_name: str = "chat-live.jsonl", reset: bool = True, persist_path=None) -> None:
     """Start (or reset) the live chat chain and its daemon for this process. The
     KnowledgeStore loads any earned answers from persist_path (the real
-    data/confirmed_secondary.json by default; tests pass a temp path)."""
+    data/confirmed_secondary.json by default; tests pass a temp path). A reset
+    ROTATES the previous chain to a timestamped archive — receipts are evidence,
+    so a restart never deletes them."""
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / chain_name
     if reset:
-        path.unlink(missing_ok=True)
+        _rotate(path)
     chain = ReceiptChain(path)
     if not chain.receipts():
         chain.append({"type": "session_start",
