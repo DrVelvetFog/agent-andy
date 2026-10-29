@@ -556,20 +556,28 @@ proposalSlot.addEventListener('click', async e => {
 
 // "Try to break it": the same gated path as normal chat (demo=true just means no
 // model spend and voice off); every attack is receipted like any other message.
+// The chips, input, and Send attack button are disabled while a request runs (like
+// send()), so a double-click can't fire two at once; the chain lock is the real fix.
+function attackControls() { return [...document.querySelectorAll('#attacks button'), $('#attackMsg'), $('#attackSend')]; }
+
 async function sendAttack(text) {
   if (!text || !text.trim()) return;
-  addBubble('you', 'typed · demo', text);
-  const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text, voice: false, demo: true }) }).then(x => x.json()).catch(() => null);
-  if (res && !res.error) {
-    chatChainName = res.chain_name || chatChainName;
-    await refreshChat();
-    const sel = $('#chain');
-    if (![...sel.options].some(o => o.value === chatChainName)) await loadChains();
-    sel.value = chatChainName;
-    await loadChain(chatChainName);
-    await refreshPending();
-  }
+  const controls = attackControls();
+  controls.forEach(c => c.disabled = true);
+  try {
+    addBubble('you', 'typed · demo', text);
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, voice: false, demo: true }) }).then(x => x.json()).catch(() => null);
+    if (res && !res.error) {
+      chatChainName = res.chain_name || chatChainName;
+      await refreshChat();
+      const sel = $('#chain');
+      if (![...sel.options].some(o => o.value === chatChainName)) await loadChains();
+      sel.value = chatChainName;
+      await loadChain(chatChainName);
+      await refreshPending();
+    }
+  } finally { controls.forEach(c => c.disabled = false); }
 }
 
 /* ---------- wiring ---------- */

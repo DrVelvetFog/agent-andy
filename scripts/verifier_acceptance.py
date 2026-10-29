@@ -13,6 +13,10 @@ Proves the independent verifier on a realistic chain:
        - delete a middle receipt
        - swap two adjacent receipts
        - truncate the tail (caught via the known tip/count anchor)
+  4. Concurrent appends in one process: many threads appending to one chain at
+     once, and repeated two-simultaneous-append trials (each thread with its own
+     ReceiptChain on the same file), must leave a chain that verifies with unique,
+     sequential seq numbers and correct prev links.
 
 No network, no API key: this exercises the receipt spine and the verifier, not
 the brain. The verifier always re-reads from disk — it is handed file paths,
@@ -21,16 +25,19 @@ never the in-memory chain.
 
 from __future__ import annotations
 
+import json
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from agent import tools  # noqa: E402
-from receipts import ReceiptChain, verify_chain  # noqa: E402
+from receipts import GENESIS, ReceiptChain, verify_chain  # noqa: E402
 
 RUNS = ROOT / "runs"
+RACE = RUNS / "verifier-concurrent.jsonl"
 CLEAN = RUNS / "verifier-clean.jsonl"
 TMP = RUNS / "verifier-tamper.jsonl"
 
@@ -121,6 +128,32 @@ def main() -> int:
     # anchor, proving the anchor is what catches a truncated tail.
     anchor_needed, _ = verify_chain(TMP)
 
+    # Concurrency: threads released together by a barrier, each on its own
+    # ReceiptChain instance for the same file (the lock must be shared by path).
+    def _race(n_threads, per_thread, start_receipts=0):
+        RACE.unlink(missing_ok=True)
+        for k in range(start_receipts):
+            ReceiptChain(RACE).append({"type": "seed", "summary": f"seed {k}"})
+        gate = threading.Barrier(n_threads)
+
+        def worker(t):
+            ch = ReceiptChain(RACE)
+            gate.wait()
+            for j in range(per_thread):
+                ch.append({"type": "race", "summary": f"thread {t} append {j}"})
+        ts = [threading.Thread(target=worker, args=(t,)) for t in range(n_threads)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        rows = [json.loads(l) for l in RACE.read_text(encoding="utf-8").splitlines() if l.strip()]
+        want = start_receipts + n_threads * per_thread
+        links = all(r["prev"] == (rows[i - 1]["hash"] if i else GENESIS) for i, r in enumerate(rows))
+        return (verify_chain(RACE)[0] and len(rows) == want
+                and [r["seq"] for r in rows] == list(range(want)) and links)
+
+    many_ok = _race(16, 25)
+    pair_trials = [_race(2, 1, start_receipts=1) for _ in range(50)]
+    print(f"concurrency: 16 threads x 25 appends -> {'ok' if many_ok else 'CORRUPT'}; "
+          f"two simultaneous appends: {sum(pair_trials)}/50 trials clean\n")
+
     checks = {
         "verdict mix has allow+stage+block": all(c > 0 for c in mix.values()),
         "chain length >= 10": n >= 10,
@@ -131,6 +164,8 @@ def main() -> int:
         "clean chain verifies end to end": clean_ok,
         "all five tamper cases fail by exact receipt": all_named,
         "tail truncation needs the anchor (bare prefix passes)": anchor_needed is True,
+        "concurrent: 16 threads x 25 appends -> verifies, seq 0..399 unique, prev linked": many_ok,
+        "concurrent: 50/50 two-simultaneous-append trials leave a verifying chain": all(pair_trials),
     }
     print()
     for label, ok in checks.items():
