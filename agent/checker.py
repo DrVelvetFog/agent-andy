@@ -18,6 +18,11 @@ cannot read, or a malformed rule is a block, never a silent allow:
 
 Every verdict carries the reason the policy gave, so it lands in the receipt
 and a reader of the chain sees why each step was allowed, held, or refused.
+
+The engine rules on the summary AND on every string in the action's "args" (the
+payload a tool will actually act on). The most restrictive match wins: a block in
+either blocks, else a stage in either stages. A clean summary cannot carry a
+dirty payload past the gate.
 """
 
 from __future__ import annotations
@@ -29,8 +34,44 @@ TIERS = (ALLOW, STAGE, BLOCK)
 CHECKER = "deterministic-policy-engine"
 
 
+_RANK = {ALLOW: 0, STAGE: 1, BLOCK: 2}
+
+
+class _MalformedRule(Exception):
+    pass
+
+
 def _v(verdict: str, reason: str, rule: str) -> dict:
     return {"verdict": verdict, "reason": reason, "rule": rule, "checker": CHECKER}
+
+
+def normalize(text) -> str:
+    """Lower-case and collapse whitespace, so a tab or doubled space ("wire\t$5")
+    cannot slip between the words of a pattern."""
+    return " ".join(str(text).lower().split())
+
+
+def payload_strings(args) -> list[str]:
+    """Every string in a tool's arguments, nested lists/dicts included, in a fixed order."""
+    if isinstance(args, str):
+        return [args]
+    if isinstance(args, dict):
+        return [s for k in sorted(args, key=str) for s in payload_strings(args[k])]
+    if isinstance(args, (list, tuple)):
+        return [s for v in args for s in payload_strings(v)]
+    return []
+
+
+def _first_match(text: str, ruleset: list):
+    """The first rule (top to bottom) whose pattern appears in `text`, or None."""
+    for rule in ruleset:
+        tier = rule.get("tier")
+        patterns = rule.get("any", [])
+        if tier not in TIERS or not isinstance(patterns, list):
+            raise _MalformedRule(str(rule.get("id", "?")))
+        if any(str(p).lower() in text for p in patterns):
+            return rule
+    return None
 
 
 def evaluate(action: dict) -> dict:
@@ -43,19 +84,23 @@ def evaluate(action: dict) -> dict:
     except Exception as e:  # unreadable/malformed policy -> do not allow
         return _v(BLOCK, f"policy unavailable, fail closed: {type(e).__name__}", "policy-load-error")
 
-    # Whitespace is collapsed before matching, so a tab or doubled space ("wire\t$5")
-    # cannot slip between the words of a pattern.
-    summary = " ".join(str(action.get("summary", "")).lower().split())
+    summary = normalize(action.get("summary", ""))
     if not summary:
         return _v(BLOCK, "empty action — nothing to judge, fail closed", "empty-action")
 
-    for rule in ruleset:
-        tier = rule.get("tier")
-        patterns = rule.get("any", [])
-        if tier not in TIERS or not isinstance(patterns, list):
-            return _v(BLOCK, f"malformed rule '{rule.get('id', '?')}' — fail closed", "malformed-rule")
-        if any(str(p).lower() in summary for p in patterns):
-            return _v(tier, str(rule.get("reason", "")), str(rule.get("id", "?")))
+    # The summary first, then every payload string; the most restrictive match wins
+    # (ties keep the earlier text, so a summary match is reported over a payload one).
+    texts = [summary] + [normalize(t) for t in payload_strings(action.get("args"))]
+    best = None
+    for text in texts:
+        try:
+            rule = _first_match(text, ruleset)
+        except _MalformedRule as e:
+            return _v(BLOCK, f"malformed rule '{e}' — fail closed", "malformed-rule")
+        if rule is not None and (best is None or _RANK[rule["tier"]] > _RANK[best["tier"]]):
+            best = rule
+    if best is not None:
+        return _v(best["tier"], str(best.get("reason", "")), str(best.get("id", "?")))
 
     # A caller may flag an action irreversible even when no pattern matched.
     if action.get("irreversible", False):

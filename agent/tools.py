@@ -11,6 +11,7 @@ system commands.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Callable
 
@@ -31,10 +32,17 @@ def tool(name: str):
 
 
 def run(chain, name: str, summary: str = "", **kwargs) -> dict:
-    """Propose -> check -> receipt -> (only if allowed) execute."""
+    """Propose -> check -> receipt -> (only if allowed) execute.
+
+    The checker rules on the summary AND the payload (the tool's arguments). The
+    receipt proves what was checked without storing it: a sha256 of the normalized
+    payload and its length — never the raw text, which could hold a secret."""
     action = {"type": "tool", "tool": name, "summary": summary or name}
-    verdict = checker.evaluate(action)
-    receipt = chain.append({**action, "verdict": verdict})
+    verdict = checker.evaluate({**action, "args": kwargs})
+    payload = "\n".join(checker.normalize(t) for t in checker.payload_strings(kwargs))
+    receipt = chain.append({**action, "payload_sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+                            "payload_len": len(payload), "payload_fields": sorted(kwargs),
+                            "verdict": verdict})
 
     result: object = None
     executed = False
