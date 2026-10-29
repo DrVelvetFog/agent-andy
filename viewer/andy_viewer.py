@@ -237,6 +237,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
+        # Every GET route — the page, the chain reads, verify/tamper, pending, audio —
+        # is served only to this page: a DNS-rebound name or another site gets 403
+        # and no data. Same rule as POST; GETs carry no body, so no content-type check.
+        if not self._local_request():
+            self._json({"error": "forbidden: request not from this page (Origin/Host)"}, 403)
+            return
         u = urlparse(self.path)
         q = parse_qs(u.query)
         if u.path in ("/", "/index.html"):
@@ -269,10 +275,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def _local_request(self) -> bool:
-        """Only this page may POST. If the browser sent an Origin, it must be this
-        server's own (http://127.0.0.1:<port> or http://localhost:<port>); with no
-        Origin, the Host header must be. Anything else — another site's page, or a
-        DNS-rebound name — is refused before any handler runs."""
+        """Only this page may call the server, GET or POST. If the browser sent an
+        Origin, it must be this server's own (http://127.0.0.1:<port> or
+        http://localhost:<port>); with no Origin, the Host header must be. Anything
+        else — another site's page, or a DNS-rebound name — is refused before any
+        handler runs."""
         port = self.server.server_address[1]
         origin = self.headers.get("Origin")
         if origin is not None:

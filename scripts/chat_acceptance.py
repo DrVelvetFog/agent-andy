@@ -26,6 +26,11 @@ trust surface.
      refused 415 — before any handler runs, so nothing is staged, written, or
      receipted. Local JSON POSTs (with Origin, or with only Host) work as before; the
      page's own Dismiss POST still works; an outside Dismiss dismisses nothing.
+  i. GETs only from this page too: every GET route (/, /index.html, /api/chains,
+     /api/chain, /api/verify, /api/tamper, /api/pending, /audio) refuses a rebound
+     Host or a foreign Origin with 403 and serves no data; a local Origin, or no
+     Origin with Host 127.0.0.1:<port> (a browser navigating to the page), works as
+     before.
 
 Voice is off here (voice=false), so nothing calls ElevenLabs or the Model API;
 the detect path and the policy gate are deterministic and local.
@@ -77,6 +82,20 @@ def _raw_post(path: str, body: str, headers: dict) -> tuple[int, dict]:
         c.endheaders(data)
         r = c.getresponse()
         return r.status, json.loads(r.read().decode("utf-8") or "{}")
+    finally:
+        c.close()
+
+
+def _raw_get(path: str, headers: dict) -> tuple[int, bytes]:
+    """GET with exactly these headers (http.client adds no Origin; Host is set here)."""
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    try:
+        c.putrequest("GET", path, skip_host=True, skip_accept_encoding=True)
+        for k, v in headers.items():
+            c.putheader(k, v)
+        c.endheaders()
+        r = c.getresponse()
+        return r.status, r.read()
     finally:
         c.close()
 
@@ -224,6 +243,46 @@ def main() -> int:
         st_p, r_p = _raw_post("/api/daemon-dismiss", "{}", {"Host": here, "Origin": f"http://{here}"})
         checks["h. the page's own Dismiss POST (no JSON type) still dismisses"] = (
             st_p == 200 and r_p.get("dismissed") is True and andy_viewer.CHAT["daemon"].dismissed is True)
+
+        # i. GETs only from this page: a rebound Host or a foreign Origin gets 403, no data
+        mp3 = ROOT / "runs" / "voice-out" / "get-host-accept.mp3"
+        mp3.parent.mkdir(parents=True, exist_ok=True)
+        mp3.write_bytes(b"ID3 stand-in clip")
+        rebound = {"Host": f"attacker.example:{PORT}"}
+        evil = {"Host": here, "Origin": "http://evil.example"}
+        routes = ["/", "/index.html", "/api/chains", f"/api/chain?name={CHAIN}", f"/api/verify?name={CHAIN}",
+                  f"/api/tamper?name={CHAIN}", "/api/pending", "/audio?path=runs/voice-out/get-host-accept.mp3"]
+        b2 = live.read_bytes()
+        got = {(r, k): _raw_get(r, h) for r in routes for k, h in (("rebound", rebound), ("evil", evil))}
+        leaked = [k for k, (st, body) in got.items()
+                  if st != 403 or b"receipts" in body or b"pending" in body or b"<html" in body.lower()
+                  or b"ID3" in body or b'"ok"' in body]
+        checks["i. every GET route refuses a rebound Host AND a foreign Origin with 403, serving no data"] = (
+            not leaked and live.read_bytes() == b2)
+        checks["i. named cases: /api/chain, /api/pending, /api/verify, /audio (rebound Host); / (evil Origin)"] = all(
+            got[(r, k)][0] == 403 for r, k in ((f"/api/chain?name={CHAIN}", "rebound"), ("/api/pending", "rebound"),
+                                               (f"/api/verify?name={CHAIN}", "rebound"), ("/", "evil"),
+                                               ("/audio?path=runs/voice-out/get-host-accept.mp3", "rebound")))
+        ok_heads = {"origin-127": {"Host": here, "Origin": f"http://{here}"},
+                    "origin-localhost": {"Host": f"localhost:{PORT}", "Origin": f"http://localhost:{PORT}"},
+                    "navigation (no Origin)": {"Host": here}}
+        local = {}
+        for name, h in ok_heads.items():
+            st_page, page = _raw_get("/", h)
+            st_ch, ch_body = _raw_get(f"/api/chain?name={CHAIN}", h)
+            st_v, v_body = _raw_get(f"/api/verify?name={CHAIN}", h)
+            st_p, p_body = _raw_get("/api/pending", h)
+            st_a, a_body = _raw_get("/audio?path=runs/voice-out/get-host-accept.mp3", h)
+            local[name] = (st_page == 200 and b"Try to break it" in page
+                           and st_ch == 200 and json.loads(ch_body)["receipts"]
+                           and st_v == 200 and json.loads(v_body)["ok"]
+                           and st_p == 200 and "pending" in json.loads(p_body)
+                           and st_a == 200 and a_body == b"ID3 stand-in clip")
+        mp3.unlink(missing_ok=True)
+        checks["i. local Origin (127.0.0.1 / localhost) GETs work exactly as before"] = (
+            local["origin-127"] and local["origin-localhost"])
+        checks["i. no Origin + Host 127.0.0.1:<port> (browser navigation) works exactly as before"] = (
+            local["navigation (no Origin)"])
 
         # the chain the UI reads is a real file under runs/
         real = ROOT / "runs" / CHAIN
