@@ -21,6 +21,11 @@ trust surface.
      archive instead of deleting it: the archive is byte-identical, verifies, and
      is listed like any chain; the new live chain starts with session_start; two
      quick restarts keep both archives; an empty or missing file makes no archive.
+  h. POSTs only from this page: a POST whose Origin (or, with no Origin, Host) is not
+     this server's own is refused 403, and a chat POST that isn't application/json is
+     refused 415 — before any handler runs, so nothing is staged, written, or
+     receipted. Local JSON POSTs (with Origin, or with only Host) work as before; the
+     page's own Dismiss POST still works; an outside Dismiss dismisses nothing.
 
 Voice is off here (voice=false), so nothing calls ElevenLabs or the Model API;
 the detect path and the policy gate are deterministic and local.
@@ -28,6 +33,7 @@ the detect path and the policy gate are deterministic and local.
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import threading
@@ -57,6 +63,22 @@ def _post(path: str, obj: dict) -> dict:
 def _get(path: str) -> dict:
     with urllib.request.urlopen(BASE + path, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
+
+
+def _raw_post(path: str, body: str, headers: dict) -> tuple[int, dict]:
+    """POST with exactly these headers (http.client adds no Origin; Host is set here)."""
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    try:
+        c.putrequest("POST", path, skip_host=True, skip_accept_encoding=True)
+        for k, v in headers.items():
+            c.putheader(k, v)
+        data = body.encode("utf-8")
+        c.putheader("Content-Length", str(len(data)))
+        c.endheaders(data)
+        r = c.getresponse()
+        return r.status, json.loads(r.read().decode("utf-8") or "{}")
+    finally:
+        c.close()
 
 
 def _chat(msg: str) -> dict:
@@ -146,6 +168,62 @@ def main() -> int:
         h = _chat("can I detect at Myrtle Beach?")
         checks["f. server still up and the good policy is back: Myrtle answers allowed"] = (
             "allowed" in h["reply_text"].lower() and h["verify"]["ok"])
+
+        # h. only this page may POST: Origin/Host + JSON content type, checked first
+        live = ROOT / "runs" / CHAIN
+        notes = ROOT / "runs" / "sandbox" / "notes.txt"
+        cs = ROOT / "runs" / "chat-accept-cs.json"
+        notes.unlink(missing_ok=True)
+        here = f"127.0.0.1:{PORT}"
+        trip = json.dumps({"message": "Check Myrtle Beach and Tybee Island for my trip, and save a note "
+                                      "with the results.", "voice": False})
+
+        def _untouched(before):
+            return (live.read_bytes() == before and not notes.exists() and not cs.exists()
+                    and andy_viewer.CHAT["store"].pending == {})
+
+        b0 = live.read_bytes()
+        st_evil, _ = _raw_post("/api/chat", trip, {"Host": here, "Origin": "http://evil.example",
+                                                   "Content-Type": "application/json"})
+        checks["h. evil Origin + trip note: 403, nothing staged, no note, no receipt"] = (
+            st_evil == 403 and _untouched(b0))
+        st_txt, _ = _raw_post("/api/chat", trip, {"Host": here, "Content-Type": "text/plain"})
+        checks["h. plain-text content type: 415, nothing staged, no note, no receipt"] = (
+            st_txt == 415 and _untouched(b0))
+        st_none, _ = _raw_post("/api/chat", trip, {"Host": here})
+        st_port, _ = _raw_post("/api/chat", trip, {"Host": here, "Origin": "http://127.0.0.1:9999",
+                                                   "Content-Type": "application/json"})
+        st_host, _ = _raw_post("/api/chat", trip, {"Host": "attacker.example:8794",
+                                                   "Content-Type": "application/json"})
+        checks["h. no content type 415; wrong-port Origin 403; DNS-rebound Host 403; nothing changed"] = (
+            st_none == 415 and st_port == 403 and st_host == 403 and _untouched(b0))
+        # the 5.5 repro: a plain-text cross-site trip-note POST, then a cross-site "yes"
+        st_a, _ = _raw_post("/api/chat", trip, {"Host": here, "Origin": "http://evil.example",
+                                                "Content-Type": "text/plain"})
+        st_b, _ = _raw_post("/api/chat", json.dumps({"message": "yes", "voice": False}),
+                            {"Host": here, "Origin": "http://evil.example", "Content-Type": "text/plain"})
+        checks["h. 5.5 repro (plain-text stage, then 'yes'): both refused, no note, no saved answer"] = (
+            st_a in (403, 415) and st_b in (403, 415) and _untouched(b0))
+        myrtle = json.dumps({"message": "can I detect at Myrtle Beach?", "voice": False})
+        st_o, r_o = _raw_post("/api/chat", myrtle, {"Host": here, "Origin": f"http://{here}",
+                                                    "Content-Type": "application/json; charset=utf-8"})
+        st_l, r_l = _raw_post("/api/chat", myrtle, {"Host": f"localhost:{PORT}",
+                                                    "Origin": f"http://localhost:{PORT}",
+                                                    "Content-Type": "application/json"})
+        st_h, r_h = _raw_post("/api/chat", myrtle, {"Host": here, "Content-Type": "application/json"})
+        checks["h. local Origin (127.0.0.1 and localhost) + JSON: works exactly as before"] = (
+            st_o == 200 and st_l == 200 and all("allowed" in r["reply_text"].lower() and r["verify"]["ok"]
+                                                for r in (r_o, r_l)))
+        checks["h. no Origin, Host 127.0.0.1:<port> + JSON: works exactly as before"] = (
+            st_h == 200 and "allowed" in r_h["reply_text"].lower() and r_h["verify"]["ok"])
+        b1 = live.read_bytes()
+        st_d, _ = _raw_post("/api/daemon-dismiss", "{}", {"Host": here, "Origin": "http://evil.example"})
+        checks["h. daemon-dismiss from an evil Origin: 403, dismisses nothing, no receipt"] = (
+            st_d == 403 and live.read_bytes() == b1 and andy_viewer.CHAT["daemon"].dismissed is False)
+        # exactly what the page sends: Origin of this page, body '{}', no Content-Type
+        st_p, r_p = _raw_post("/api/daemon-dismiss", "{}", {"Host": here, "Origin": f"http://{here}"})
+        checks["h. the page's own Dismiss POST (no JSON type) still dismisses"] = (
+            st_p == 200 and r_p.get("dismissed") is True and andy_viewer.CHAT["daemon"].dismissed is True)
 
         # the chain the UI reads is a real file under runs/
         real = ROOT / "runs" / CHAIN

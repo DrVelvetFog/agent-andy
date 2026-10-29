@@ -268,10 +268,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json({"error": "not found"}, 404)
 
+    def _local_request(self) -> bool:
+        """Only this page may POST. If the browser sent an Origin, it must be this
+        server's own (http://127.0.0.1:<port> or http://localhost:<port>); with no
+        Origin, the Host header must be. Anything else — another site's page, or a
+        DNS-rebound name — is refused before any handler runs."""
+        port = self.server.server_address[1]
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            return origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}")
+        return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
+
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         u = urlparse(self.path)
         length = int(self.headers.get("Content-Length", 0) or 0)
         raw = self.rfile.read(length) if length else b""
+        # Checked before ANY handler runs: a refused POST leaves no receipt and no state.
+        if u.path in ("/api/chat", "/api/daemon-dismiss") and not self._local_request():
+            self._json({"error": "forbidden: request not from this page (Origin/Host)"}, 403)
+            return
+        if u.path == "/api/daemon-dismiss":
+            self._json(daemon_dismiss())   # its body is ignored, so no JSON type is required
+            return
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if u.path == "/api/chat" and ctype != "application/json":
+            self._json({"error": "unsupported media type: send application/json"}, 415)
+            return
         try:
             body = json.loads(raw.decode("utf-8")) if raw else {}
         except Exception:
@@ -281,8 +303,6 @@ class Handler(BaseHTTPRequestHandler):
                                     body.get("voice", "auto"),
                                     bool(body.get("run_general", True)),
                                     bool(body.get("demo", False))))
-        elif u.path == "/api/daemon-dismiss":
-            self._json(daemon_dismiss())
         else:
             self._json({"error": "not found"}, 404)
 
