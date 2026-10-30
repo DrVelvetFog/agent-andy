@@ -1,5 +1,7 @@
 # Agent Andy
 
+[![tests](https://github.com/DrVelvetFog/agent-andy/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/DrVelvetFog/agent-andy/actions/workflows/tests.yml)
+
 A personal agent that cannot act without leaving a receipt.
 
 **What it's for:** an agent that checks a local rule before you act, and *proves*

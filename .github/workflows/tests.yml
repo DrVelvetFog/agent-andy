@@ -1,0 +1,22 @@
+# Runs every acceptance suite on each push, with no API keys and no network
+# (tests/test_acceptance.py unsets the keys and forces a dead proxy itself).
+# Suites that need a key, clips, photos, or a built .app skip with their reason.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m unittest discover tests -v
