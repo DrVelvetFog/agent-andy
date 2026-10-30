@@ -60,8 +60,31 @@ Measured by the acceptance suites in this repo, with no API key:
 | All suites | 16 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
 
 The four skips are the runs that need a key, recorded voice clips, the Witness
-photos, or a built Mac app. Live-model results (Spark planning, SAM on the Witness
-photos, voice in and out) are described in the build log below.
+photos, or a built Mac app. **Run with the keys, clips, and photos on Oct 30, the
+three model suites and the live Witness run all pass:** Spark planned a turn and
+every step was gated before it ran (`gated_loop_acceptance.py`); the injection
+gauntlet held 16/16 with all 5 legitimate controls passing, including Witness on
+real photos; SAM segmented the cable, book, and charger (49%, 35%, and 34% of the
+frame) and the box shipped (`witness_acceptance.py`); and three recorded clips were
+transcribed live and routed through the gate (`voice_live_run.py`).
+
+### Verify a real live run, no key
+
+[`examples/live-demo-chain.jsonl`](examples/live-demo-chain.jsonl) is the receipt
+chain from one live session on Oct 30, with the keys set. Its 33 receipts include
+typed and spoken turns (Muse Voice Transcribe), three SAM observations and a shipped
+checklist, a Spark plan whose step was checked before it ran, replies voiced by
+ElevenLabs, a staged Tybee answer, the daemon's one suggestion, and a blocked wire
+attempt. Recompute it yourself:
+
+```bash
+python3 scripts/verify_receipts.py examples/live-demo-chain.jsonl
+# PASS — 33 receipts verified.
+```
+
+Change one character in any receipt's content and the verifier names the receipt
+that no longer recomputes. The chain records hashes of the photos and audio, not the
+files, so it proves what was recorded; it does not let you replay the model calls.
 
 **Tamper-evident, not tamper-proof.** Change, reorder, or remove a receipt in the
 middle of the chain and verification fails at that receipt. Nothing signs the chain
