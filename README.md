@@ -64,6 +64,17 @@ The code in this repository was written during the hackathon window, **Oct 26 â€
 Nov 4, 2026**, except where the *Prior inspiration* section below says otherwise.
 No Plummy or aee-e2 code was imported.
 
+## Run every acceptance suite
+
+```bash
+python3 -m unittest discover tests
+```
+
+Runs all the suites in `scripts/` one after another, with no API keys and no
+network. A suite that needs a key, clips, photos, or a built `.app` shows as a
+skip with its reason, never a pass. It kills a running viewer (the Mac app
+suite cleans up with `pkill`), so never run it while the viewer is up.
+
 ## Try the Day 1 acceptance test
 
 ```bash
