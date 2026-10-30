@@ -1,8 +1,9 @@
 """Run every acceptance suite as a unittest, so `python3 -m unittest discover tests` works.
 
 Each scripts/*_acceptance.py (plus scripts/voice_live_run.py) runs as its own
-subprocess, one after another (the suites bind fixed ports), with MODEL_API_KEY
-and ELEVENLABS_API_KEY unset and the network forced to a dead proxy.
+subprocess, one after another (the suites bind fixed ports), with MODEL_API_KEY,
+ELEVENLABS_API_KEY, and Andy's chain-signing key settings unset and the network
+forced to a dead proxy.
 
 Exit 0 is a pass. A suite that cannot run here is a SKIP that says why, never a
 silent pass: gated_loop's PASS-BY-FALLBACK (exit 3), injection's L3 control
@@ -38,6 +39,8 @@ def _env() -> dict:
     env = dict(os.environ)
     env.pop("MODEL_API_KEY", None)
     env.pop("ELEVENLABS_API_KEY", None)
+    env.pop("ANDY_CHAIN_SIGNING_KEY", None)   # never sign test chains with the real key
+    env.pop("ANDY_CHAIN_SIGNING_PUB", None)
     env.update(HTTPS_PROXY=DEAD_PROXY, HTTP_PROXY=DEAD_PROXY, https_proxy=DEAD_PROXY,
                http_proxy=DEAD_PROXY, NO_PROXY=LOCAL, no_proxy=LOCAL,
                ANDY_APP_NONINTERACTIVE="1")

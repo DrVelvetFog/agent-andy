@@ -10,6 +10,10 @@ machine.
 Appends are atomic within one process: a lock per chain file (shared by every
 ReceiptChain on that path) is held across the read, the seq/prev computation, and
 the write, so two threads can never both claim the same seq and prev.
+
+After every append, still under the lock, the new tip is signed into <chain>.sig
+when Andy's signing key is configured (see signing.py); without it, any stale
+signature is removed, so the chain reads UNSIGNED rather than wrongly signed.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ import json
 import threading
 import time
 from pathlib import Path
+
+from . import signing
 
 GENESIS = "0" * 64
 
@@ -75,4 +81,5 @@ class ReceiptChain:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(canonical(receipt).decode("utf-8") + "\n")
+            signing.sign_tip(self.path, receipt["seq"] + 1, receipt["hash"])
             return receipt

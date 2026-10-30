@@ -43,6 +43,9 @@ sys.path.insert(0, str(ROOT))
 from agent import detect, tier2, verify_source as vs, voice  # noqa: E402
 from agent.verify_source import KnowledgeStore  # noqa: E402
 from receipts import ReceiptChain, verify_chain  # noqa: E402
+from signing_testkey import use_test_key  # noqa: E402
+
+use_test_key()   # a throwaway key: approvals here are signed, as in the demo
 
 RUNS = ROOT / "runs"
 CHAIN = RUNS / "verify-receipts.jsonl"

@@ -38,7 +38,7 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from receipts import ReceiptChain, verify_chain  # noqa: E402  (after sys.path insert)
+from receipts import ReceiptChain, signing, verify_chain  # noqa: E402  (after sys.path insert)
 from agent import voice  # noqa: E402  — the real gated chat path (typed + spoken share it)
 from agent.verify_source import KnowledgeStore  # noqa: E402  — verify-on-demand session memory
 
@@ -63,8 +63,8 @@ def _rotate(path: Path) -> Path | None:
     """Move a non-empty chain aside to a timestamped archive in the same directory
     (chat-live-YYYYMMDD-HHMMSS.jsonl, UTC, then -1, -2, … if taken) and return it.
     The bytes are untouched, so the archive still verifies, and it stays listable
-    like any other chain. Never overwrites an archive. A missing or empty file is
-    left alone and returns None."""
+    like any other chain. Never overwrites an archive. Its signature, if any, moves
+    with it. A missing or empty file is left alone and returns None."""
     if not path.exists() or path.stat().st_size == 0:
         return None
     stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
@@ -73,6 +73,8 @@ def _rotate(path: Path) -> Path | None:
         n += 1
         dest = path.with_name(f"{path.stem}-{stamp}-{n}{path.suffix}")
     path.rename(dest)
+    if signing.sig_path(path).exists():
+        signing.sig_path(path).rename(signing.sig_path(dest))
     return dest
 
 
@@ -294,6 +296,18 @@ def tamper(name: str) -> dict:
             "before": before, "after": after, "field": "summary"}
 
 
+def verify_with_signature(path) -> dict:
+    """The hash check, then the chain-tip signature: VERIFIED, UNSIGNED, or FAIL. A
+    signature that does not verify fails the whole chain."""
+    ok, reason = verify_chain(path)
+    if not ok:
+        return {"ok": False, "reason": reason, "signature": signing.FAIL, "signature_reason": None}
+    state, why = signing.chain_signature(path)
+    if state == signing.FAIL:
+        return {"ok": False, "reason": f"signature: {why}", "signature": state, "signature_reason": why}
+    return {"ok": True, "reason": reason, "signature": state, "signature_reason": why}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _json(self, obj, code: int = 200) -> None:
         payload = json.dumps(obj).encode("utf-8")
@@ -330,8 +344,7 @@ class Handler(BaseHTTPRequestHandler):
             if path is None:
                 self._json({"ok": False, "reason": "no such chain"})
             else:
-                ok, reason = verify_chain(path)
-                self._json({"ok": ok, "reason": reason})
+                self._json(verify_with_signature(path))
         elif u.path == "/api/tamper":
             self._json(tamper((q.get("name") or [""])[0]))
         elif u.path == "/api/pending":

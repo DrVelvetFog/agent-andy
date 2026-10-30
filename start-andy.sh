@@ -9,7 +9,19 @@ cd "$(dirname "$0")"
 PORT="${1:-8799}"
 URL="http://127.0.0.1:${PORT}"
 
+# Sign chain tips and earned answers with Andy's dedicated key when it is on this
+# Mac (receipts/signing.py). No passphrase, so nothing to load first. Without the
+# key, chains still hash-check but read UNSIGNED, and earned answers stage.
+if [ -z "${ANDY_CHAIN_SIGNING_KEY:-}" ] && [ -f "${HOME}/.ssh/id_ed25519_andy_chain" ]; then
+  export ANDY_CHAIN_SIGNING_KEY="${HOME}/.ssh/id_ed25519_andy_chain"
+fi
+
 echo "Agent Andy  →  ${URL}"
+if [ -n "${ANDY_CHAIN_SIGNING_KEY:-}" ]; then
+  echo "  Signing: ON (Andy chain key)"
+else
+  echo "  Signing: OFF — no Andy chain key, so chains will read UNSIGNED"
+fi
 echo
 echo "  TYPED-CHAT FALLBACK: if voice or the Meta Model API is down on stage,"
 echo "  just type in the chat box. Typed input runs through the exact same"

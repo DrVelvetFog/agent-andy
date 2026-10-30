@@ -23,6 +23,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from receipts import signing
+
 from . import tier2
 
 CONFIRMED_SECONDARY = "confirmed_secondary"
@@ -222,8 +224,9 @@ def _entry_problem(entry) -> str | None:
     wheretodetect.org page that the site-index lookup gives for that place (the same
     lookup that offered it for approval), a sha256 page hash, real dates,
     approved_by "owner", and a receipt-hash-shaped verify_promote_ref. This
-    does NOT prove the approval happened: a well-formed forged entry for an indexed
-    place still passes, and closing that needs chain-tip signing (post-Nov-4)."""
+    shape check does not prove the approval happened; the file's signature does
+    (see _load_persist), so a well-formed forged entry in an unsigned or re-signed
+    file is not answered."""
     if not isinstance(entry, dict):
         return "entry is not an object"
     for f in _REQUIRED:
@@ -255,19 +258,39 @@ def _entry_problem(entry) -> str | None:
     return None
 
 
+def _signature_problem(path: Path) -> str | None:
+    """Why the earned-answers file's signature doesn't vouch for it, or None if it
+    VERIFIES against Andy's public key."""
+    state, reason = signing.verify_file(path)
+    if state == signing.VERIFIED:
+        return None
+    if state == signing.UNSIGNED:
+        return f"earned answers are UNSIGNED ({reason})"
+    return f"earned answers signature FAIL ({reason})"
+
+
 def _load_persist(path: Path):
-    """Load the earned-answers file. Returns (confirmed, invalid_keys, error). Fail
-    closed: a missing file is simply empty; a malformed file, or an entry that fails
-    _entry_problem, is NOT answered from — the caller stages with the reason."""
+    """Load the earned-answers file. Returns (confirmed, invalid_keys, error,
+    signature_problem). Fail closed: a missing file is simply empty; a malformed
+    file, or an entry that fails _entry_problem, is NOT answered from — the caller
+    stages with the reason. A file with entries must also carry a signature that
+    VERIFIES against Andy's public key; if not, every entry in it stages."""
     if not path.exists():
-        return {}, set(), None
+        return {}, set(), None, None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return {}, set(), "earned answers file unreadable"
+        return {}, set(), "earned answers file unreadable", None
     if not isinstance(data, dict) or not isinstance(data.get("entries"), dict):
-        return {}, set(), "earned answers file unreadable"
+        return {}, set(), "earned answers file unreadable", None
     confirmed, invalid = {}, set()
+    problem = _signature_problem(path) if data["entries"] else None
+    if problem:
+        for key, entry in data["entries"].items():
+            invalid.add(_norm(key))
+            if isinstance(entry, dict) and isinstance(entry.get("place"), str):
+                invalid.add(_norm(entry["place"]))
+        return {}, invalid, None, problem
     for key, entry in data["entries"].items():
         if _entry_problem(entry) is not None:
             invalid.add(_norm(key))
@@ -275,7 +298,7 @@ def _load_persist(path: Path):
                 invalid.add(_norm(entry["place"]))   # stage the place it names, too
             continue
         confirmed[_norm(entry["place"])] = _confirmed_outcome(entry)
-    return confirmed, invalid, None
+    return confirmed, invalid, None, None
 
 
 class KnowledgeStore:
@@ -290,10 +313,11 @@ class KnowledgeStore:
         self.confirmed: dict = {}        # norm place -> confirmed-secondary outcome
         self.pending: dict = {}          # norm place -> proposal, awaiting the owner's yes
         self.last_candidate = None       # (place, url) from the most recent staged Tier-2 candidate
-        loaded, invalid, err = _load_persist(self.persist_path)
+        loaded, invalid, err, sig_problem = _load_persist(self.persist_path)
         self.confirmed.update(loaded)    # earned answers carried over from a previous session
-        self.invalid_places = invalid    # entries present but missing a required field
+        self.invalid_places = invalid    # entries present but malformed, or in an unsigned file
         self.persist_error = err         # the whole file is malformed / unreadable
+        self.signature_problem = sig_problem  # the file has entries but no signature that verifies
 
     def get(self, place: str):
         return self.confirmed.get(_norm(place))
@@ -306,7 +330,7 @@ class KnowledgeStore:
         if self.persist_error:
             return self.persist_error
         if _norm(place) in self.invalid_places:
-            return "earned answers file unreadable"
+            return self.signature_problem or "earned answers file unreadable"
         return None
 
     def note_candidate(self, place: str, url: str) -> None:
@@ -452,15 +476,18 @@ class KnowledgeStore:
         entry = _entry_from_proposal(p, approval_date, receipt["hash"])  # ref = the receipt's hash
         self.confirmed[key] = _confirmed_outcome(entry)
         self.invalid_places.discard(key)
-        self._persist_put(key, entry)
-        return {"ok": True, "place": p["place"]}
+        signed = self._persist_put(key, entry)
+        return {"ok": True, "place": p["place"], "signed": signed}
 
     def _persist_put(self, key: str, entry: dict) -> None:
-        """Write/update ONE entry in the earned-answers file, atomically. Called only
-        from confirm(), after the verify_promote receipt — fetch/extract/decline never
-        write here."""
+        """Write/update ONE entry in the earned-answers file, atomically, then sign the
+        file with Andy's key. Called only from confirm(), after the verify_promote
+        receipt — fetch/extract/decline never write here. Existing entries are carried
+        over ONLY if the file's signature verifies, so signing never launders an entry
+        nobody signed. Without the key the file is written UNSIGNED, and its entries
+        stage after a restart. Returns whether the file is now signed."""
         data = {"note": _PERSIST_NOTE, "entries": {}}
-        if self.persist_path.exists():
+        if self.persist_path.exists() and _signature_problem(self.persist_path) is None:
             try:
                 cur = json.loads(self.persist_path.read_text(encoding="utf-8"))
                 if isinstance(cur, dict) and isinstance(cur.get("entries"), dict):
@@ -470,6 +497,9 @@ class KnowledgeStore:
         data["entries"][key] = entry
         _write_persist(self.persist_path, data)
         self.persist_error = None  # the file is good again after a successful write
+        signed = signing.sign_file(self.persist_path)
+        self.signature_problem = None if signed else _signature_problem(self.persist_path)
+        return signed
 
     def _confirm_note(self, chain, key: str) -> dict:
         """Owner approved a held note: an approval receipt lands first, then the note

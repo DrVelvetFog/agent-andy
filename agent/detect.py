@@ -208,7 +208,7 @@ def answer(chain, place: str, strict: bool = False, store=None) -> dict:
                 if ur:
                     out["persist_error"] = ur
                     out["staging_reason"] = (out["staging_reason"] or "needs a human") + \
-                        " — earned answers file unreadable, so no saved answer was used"
+                        f" — {ur}, so no saved answer was used"
             # Otherwise Tier 2 (the sitemap index) can add a candidate to the stage,
             # and we remember it so "verify it" knows which page to fetch.
             name, st = _split_place_state(place)

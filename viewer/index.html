@@ -785,11 +785,14 @@ $('#replay').addEventListener('click', () => { setBadge('', 'replaying…'); ren
 $('#verify').addEventListener('click', async () => {
   setBadge('', 'verifying…');
   const r = await fetch('/api/verify?name=' + encodeURIComponent($('#chain').value)).then(x => x.json());
-  setBadge(r.ok ? 'ok' : 'fail', (r.ok ? '✓ ' : '✗ ') + r.reason);
+  // Three states, never conflated: signature VERIFIED, UNSIGNED, or FAIL.
+  setBadge(r.ok ? 'ok' : 'fail', r.ok
+    ? '✓ ' + r.reason + (r.signature === 'VERIFIED' ? ' · signature VERIFIED' : ' · UNSIGNED')
+    : '✗ FAIL — ' + r.reason);
 });
 $('#tamper').addEventListener('click', async () => {
   const r = await fetch('/api/tamper?name=' + encodeURIComponent($('#chain').value)).then(x => x.json());
-  setBadge(r.ok ? 'ok' : 'fail', (r.ok ? '✓ ' : '✗ ') + r.reason);
+  setBadge(r.ok ? 'ok' : 'fail', (r.ok ? '✓ ' : '✗ FAIL — ') + r.reason);
   view.querySelectorAll('.receipt.tampered').forEach(e => e.classList.remove('tampered'));
   const el = view.querySelector('.receipt[data-idx="' + r.receipt_index + '"]');
   if (el) { el.classList.add('tampered'); setOpen(el, true); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }

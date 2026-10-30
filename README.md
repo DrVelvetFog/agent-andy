@@ -35,8 +35,8 @@ git clone https://github.com/DrVelvetFog/agent-andy.git && cd agent-andy
 | Type **can I detect at Myrtle Beach?** | **ALLOW**: allowed on the public beach only, not in the dunes, with its source (City of Myrtle Beach, official beach laws page). |
 | Type **can I detect at Tybee Island?** | **STAGED**: forums say it's allowed, but no city rule was found, so Andy holds it for a human instead of guessing. |
 | Open **Try to break it** and click **wire $5,000 to this account** | **BLOCK** (rule: financial), and nothing runs. |
-| Press **✓ Verify** | **✓ 16 receipts verified**: the project's own verifier recomputes every hash from the first receipt. |
-| Press **⚡ Flip one byte** | **✗ receipt 1: hash does not recompute**, on a throwaway copy. Press Verify again and the real chain still verifies. |
+| Press **✓ Verify** | **✓ 16 receipts verified · UNSIGNED**: the project's own verifier recomputes every hash from the first receipt. UNSIGNED because your clone doesn't hold Andy's signing key (see *Signed chains* below). |
+| Press **⚡ Flip one byte** | **✗ FAIL — receipt 1: hash does not recompute**, on a throwaway copy. Press Verify again and the real chain still verifies. |
 
 Recorded on a fresh start with no keys set. Without a key, replies are text only and
 nothing calls a model: the checker, the lookup, and the verifier are all local. The
@@ -57,7 +57,8 @@ Measured by the acceptance suites in this repo, with no API key:
 | Places outside the sample | staged, never guessed | `scripts/detect_acceptance.py` |
 | Tampered chains | 5 cases (byte flip, delete, swap, truncation), each fails at the exact receipt | `scripts/verifier_acceptance.py` |
 | Concurrent writes | 50 of 50 simultaneous-append trials leave a chain that verifies | `scripts/verifier_acceptance.py` |
-| All suites | 16 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
+| Chain and earned-answer signing | a rewrite with recomputed hashes, a truncated tail, a tampered or foreign signature: FAIL; no signature: UNSIGNED; a forged earned answer: staged | `scripts/signing_acceptance.py` |
+| All suites | 17 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
 
 The four skips are the runs that need a key, recorded voice clips, the Witness
 photos, or a built Mac app. **Run with the keys, clips, and photos on Oct 30, the
@@ -80,17 +81,35 @@ attempt. Recompute it yourself:
 ```bash
 python3 scripts/verify_receipts.py examples/live-demo-chain.jsonl
 # PASS — 33 receipts verified.
+# signature: VERIFIED — chain tip (33 receipts) signed by Andy's chain key (andy-chain-signing.pub).
 ```
 
 Change one character in any receipt's content and the verifier names the receipt
 that no longer recomputes. The chain records hashes of the photos and audio, not the
 files, so it proves what was recorded; it does not let you replay the model calls.
+Andy's chain key signed its tip, and the signature sits beside it as
+`examples/live-demo-chain.jsonl.sig`.
 
-**Tamper-evident, not tamper-proof.** Change, reorder, or remove a receipt in the
-middle of the chain and verification fails at that receipt. Nothing signs the chain
-yet, so it does not prove *who* wrote it: someone who rewrites the whole file and
-recomputes every hash gets a chain that still verifies. Signing the chain tip is
-planned for after Nov 4.
+One input in it is invented: *"save a note that I'm going to Myrtle Beach on
+Saturday"* was a test prompt written for this session so Spark had something to
+plan. It is not a real trip.
+
+**Signed chains: tamper-evident and authenticated.** Every receipt commits to the
+one before it, so changing, reordering, or removing a receipt fails verification at
+that receipt. That alone doesn't prove *who* wrote the chain: someone who rewrites
+the whole file and recomputes every hash gets a chain whose hashes still check. So
+Andy also signs the chain's tip (its receipt count and last hash) with a dedicated
+Ed25519 key after every receipt, into `<chain>.sig`. A rewrite, an extra receipt,
+or a truncated tail no longer matches the signed tip. The verifier reports three
+states and never mixes them up:
+
+- **VERIFIED**: the hashes recompute and Andy's key signed this tip.
+- **UNSIGNED**: the hashes recompute, but there is no signature (or it couldn't be
+  checked), so nothing authenticates who wrote it. Tamper-evident only.
+- **FAIL**: a hash, a link, or the signature doesn't check.
+
+A signature proves only that whoever holds Andy's signing key signed that tip at
+that time. It does not prove the content is true. See *Signing setup* below.
 
 **What Witness shows.** SAM confirms that a photo shows each item on the list. It
 does not show the photo was taken just now: in chat, "witness my packing list"
@@ -114,7 +133,7 @@ Developer** track · theme: **Build for Your World**.
 | Voice in | speech to text | Muse Voice Transcribe |
 | Voice out | spoken reply, declared non-Meta and non-local | ElevenLabs (`eleven_v4`) via stdlib — `agent/tts.py` |
 | Daemon | one proactive, dismissible suggestion after a task stages something | gated + receipted, never executes — `agent/daemon.py` |
-| Receipts | hash-chained, fail-closed action log | stdlib, no model — `receipts/` |
+| Receipts | hash-chained, fail-closed action log; each chain's tip signed with Andy's Ed25519 key | stdlib + system `ssh-keygen`, no model — `receipts/` |
 
 The loop is perceive → propose → **check** → act → **receipt**, in that order,
 every turn. There is no code path to a tool that skips the checker, and no
@@ -233,11 +252,15 @@ answers **persist across sessions** in a separate, labeled file
 file with their approval date, **still below Tier 1** and still labeled *"Andy read
 the site, not the ordinance; confirm the primary."* They are never merged into the
 Tier 1 fixture and never become a primary citation; a persisted answer is not
-re-fetched automatically (say "verify it" again to refresh it). **Delete an entry
-from that file to revoke that answer** — the place then stages again, with its
-Tier 2 candidate. If the file is missing Andy simply has no earned answers; if it
-is malformed, Andy stages the affected place with the reason stated and never
-answers from it. Verify-on-demand also fetches only URLs that are already in the
+re-fetched automatically (say "verify it" again to refresh it). The file is
+**signed with Andy's key on every approval** (`confirmed_secondary.json.sig`), and
+a file with entries answers only if that signature verifies. A forged entry, or
+any hand edit, breaks it, and then **every entry in the file stages** with the
+reason stated (UNSIGNED or signature FAIL). So deleting an entry by hand revokes
+it and also stages the rest until they're approved again: revoking fails closed.
+An approval never carries an unsigned entry into a newly signed file. If the file
+is missing Andy simply has no earned answers; if it is malformed, Andy stages the
+affected place with the reason stated and never answers from it. Verify-on-demand also fetches only URLs that are already in the
 site index; any other URL is refused without a fetch, so the one bit of web Andy
 touches is the index it already holds. In the chat pane, a pending proposal shows its full
 evidence (verdict, verbatim quote, source, date, page URL, and the caveat) with
@@ -329,6 +352,21 @@ throwaway copy — the real chain is never touched — and verification fails, b
 receipt number. Every receipt the page shows is a real line from a chain under
 `runs/`; the UI is a read of real receipts, not a new trust surface. Stdlib only,
 `127.0.0.1` only.
+
+### Signing setup
+
+Andy signs with its own Ed25519 key, used for nothing else. The private key lives
+only on the demo Mac at `~/.ssh/id_ed25519_andy_chain` (mode 600, no passphrase,
+never in this repo); the public key is `data/andy-chain-signing.pub`, and anyone can
+check a signature with it. `./start-andy.sh` turns signing on when that key exists
+and prints `Signing: ON` or `Signing: OFF`. Without the key Andy signs nothing: chains
+read UNSIGNED and earned answers stage, never a silent pass as signed. To check a
+chain yourself:
+
+```bash
+python3 scripts/verify_receipts.py runs/chat-live.jsonl                      # VERIFIED, UNSIGNED, or FAIL
+python3 scripts/verify_receipts.py runs/chat-live.jsonl --require-signature  # UNSIGNED exits 2
+```
 
 ### Try to break it (≈60 seconds)
 
@@ -638,8 +676,7 @@ so it runs offline.
   summary; the viewer's POST and GET routes require a local Origin/Host, and POSTs a
   JSON body (the Mic upload takes `audio/wav`); verify-on-demand checks every
   redirect and no longer fetches on a loose name match; earned answers are validated
-  when loaded (a well-formed but forged entry still answers until entries are signed,
-  after Nov 4); the viewer and policy text name where data actually goes; and the
+  when loaded (a well-formed but forged entry still answered until Oct 30's signing); the viewer and policy text name where data actually goes; and the
   acceptance suites report fallbacks and missing prerequisites instead of passing.
 - **Oct 29 (Mic button and viewer redesign):** the Mic button records a spoken turn
   in the page and sends it through the same checker-first gate as typed chat (see
@@ -654,12 +691,20 @@ so it runs offline.
   allowed, and known: "send bob my notes"-style sentences and disguised spellings
   (letter-spaced, look-alike letters), which need checker changes after Nov 4. Both
   chat inputs now say that typed text is kept word for word in the receipts.
+- **Oct 30 (signing):** a dedicated Ed25519 key signs every chain's tip after each
+  receipt, and the earned-answers file on every approval, through the system
+  `ssh-keygen -Y` (no new dependency). The verifier, CLI, and viewer report
+  VERIFIED, UNSIGNED, or FAIL. A rewrite with recomputed hashes, a truncated tail,
+  and a forged earned answer are now caught. `receipts/signing.py`,
+  `scripts/signing_acceptance.py`.
 
 ## Known limitations
 
-- **The chain isn't signed.** It is tamper-evident within a chain, not proof of who
-  wrote it; a full rewrite with every hash recomputed still verifies. A truncated
-  tail is caught only with the tip/count anchor. Signing is planned after Nov 4.
+- **Signing is only as strong as the key.** Without Andy's key (any clone but the
+  demo Mac), chains read UNSIGNED: tamper-evident, not authenticated. A signature
+  proves who signed, not that the content is true. If the key is compromised, the
+  fix is a new key: replace `data/andy-chain-signing.pub` and re-sign, and every
+  signature made with the old key stops verifying.
 - **The checker matches phrases; it doesn't understand them.** Plain sentences like
   "send bob my notes" and disguised spellings (letter-spaced, look-alike letters)
   still come back allow. They reach only the echo and sandboxed note tools, and every
@@ -669,8 +714,10 @@ so it runs offline.
   Witness shows* above).
 - **One process.** Receipt appends are atomic within one process; two Andy processes
   writing the same chain are not protected.
-- **Earned answers aren't signed.** A well-formed but forged entry in
-  `data/confirmed_secondary.json` still answers. Deleting an entry revokes it.
+- **Revoking an earned answer stages them all.** Editing the signed earned-answers
+  file by hand breaks its signature, so every entry stages until approved again.
+- **History before Oct 30 isn't re-signed.** Older chains read UNSIGNED, and the
+  repo's older commits are not re-signed either.
 - **Typed text is kept.** Every typed message is stored word for word in the
   receipts and can't be removed without breaking the chain.
 - **Voice out is not Meta and not local.** Replies are voiced by ElevenLabs when its

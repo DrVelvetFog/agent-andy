@@ -30,9 +30,9 @@ automatically. Every property the scope fix must hold, by name:
      for a Tier 1 place still loses to Tier 1, the "<label>, <state>" place form is
      accepted, and a partial-name approval ("Cocoa" -> the Cocoa Beach page) still
      answers after a restart.
-  Known limit (printed, not a check): a fully well-formed forged entry for an indexed
-  place is indistinguishable from a real approval by the file alone — that full fix
-  needs chain-tip signing and is post-Nov-4 work.
+  Every earned-answers file here is signed with a throwaway test key, as the demo
+  signs with Andy's key, so these shape checks run behind a valid signature. An
+  unsigned or forged-signature file stages every entry: signing_acceptance.py.
 
 Temp persist files live under runs/ (gitignored); fetch is monkeypatched so the
 core is hermetic while the index-only fetch restriction still applies.
@@ -53,7 +53,15 @@ sys.path.insert(0, str(ROOT / "viewer"))
 
 import andy_viewer  # noqa: E402
 from agent import detect, verify_source as vs  # noqa: E402
-from receipts import ReceiptChain, verify_chain  # noqa: E402
+from receipts import ReceiptChain, signing, verify_chain  # noqa: E402
+from signing_testkey import use_test_key  # noqa: E402
+
+use_test_key()   # a throwaway key: approvals here are signed, as in the demo
+
+
+def _write_signed(path, data) -> None:
+    vs._write_persist(path, data)
+    signing.sign_file(path)
 
 RUNS = ROOT / "runs"
 TIER1 = ROOT / "data" / "detect_sample.toml"
@@ -143,7 +151,7 @@ def main() -> int:
 
     # c. a Tier 1 place answers from Tier 1, not the persisted file
     p_c = RUNS / "persist-c-cs.json"
-    vs._write_persist(p_c, {"note": "t", "entries": {"myrtle beach": {
+    _write_signed(p_c, {"note": "t", "entries": {"myrtle beach": {
         "place": "Myrtle Beach", "url": DAYTONA, "page_sha256": "x", "verdict": "Prohibited",
         "quote": "q", "source": "s", "verified_date": "2026-09-15", "approval_date": "2026-10-28",
         "approved_by": "owner", "caveat": "c", "verify_promote_ref": "r"}}})
@@ -184,7 +192,7 @@ def main() -> int:
     checks["f. malformed file: stages with 'earned answers file unreadable', never answers"] = (
         o_bad["decision"] == detect.STAGED and o_bad.get("persist_error") == "earned answers file unreadable")
     p_miss = RUNS / "persist-miss-cs.json"
-    vs._write_persist(p_miss, {"note": "t", "entries": {"daytona beach": {"place": "Daytona Beach"}}})
+    _write_signed(p_miss, {"note": "t", "entries": {"daytona beach": {"place": "Daytona Beach"}}})
     o_miss = detect.answer(ch, "Daytona Beach", store=vs.KnowledgeStore(persist_path=p_miss))["outcome"]
     checks["f. an entry missing a field: that place stages with the reason"] = (
         o_miss["decision"] == detect.STAGED and bool(o_miss.get("persist_error")))
@@ -194,7 +202,7 @@ def main() -> int:
     checks["g. (setup) the persisted place answers before deletion"] = (
         detect.answer(ch, "Daytona Beach", store=s_g1)["outcome"]["decision"] == detect.ANSWERED_WITH_CAVEAT)
     data = json.loads(p_e.read_text(encoding="utf-8")); data["entries"] = {}
-    vs._write_persist(p_e, data)
+    _write_signed(p_e, data)
     o_g = detect.answer(ch, "Daytona Beach", store=vs.KnowledgeStore(persist_path=p_e))["outcome"]
     checks["g. deleting the entry returns the place to staged, with its Tier 2 candidate"] = (
         o_g["decision"] == detect.STAGED and bool(o_g.get("tier2_candidates")))
@@ -207,7 +215,7 @@ def main() -> int:
     ch = _chain("persist-v.jsonl")
 
     def _ask(entry, place, key=None):
-        vs._write_persist(p_v, {"note": "t", "entries": {key or vs._norm(place): entry}})
+        _write_signed(p_v, {"note": "t", "entries": {key or vs._norm(place): entry}})
         try:
             store = vs.KnowledgeStore(persist_path=p_v)
         except Exception as ex:                       # D5: this used to crash on load
@@ -226,7 +234,7 @@ def main() -> int:
     d5_ok = {name: _refused(e, "Daytona Beach") for name, e in d5.items()}
     checks["h. D5: a number/list/dict in verdict, source, quote, url, or page_sha256 is invalid, no crash"] = (
         all(d5_ok.values()) and len(d5_ok) == 15)
-    vs._write_persist(p_v, {"note": "t", "entries": {"daytona beach": dict(good, verdict=7)}})
+    _write_signed(p_v, {"note": "t", "entries": {"daytona beach": dict(good, verdict=7)}})
     try:
         srv = andy_viewer.build_server(8789, chat_chain="persist-v-viewer.jsonl", reset=True, persist_path=p_v)
         srv.server_close()
@@ -290,9 +298,9 @@ def main() -> int:
     residual = dict(good, place="Tybee Island", url=TYBEE, verdict="Allowed", page_sha256=fake_hex,
                     verify_promote_ref=fake_hex)
     o_r = _ask(residual, "Tybee Island")
-    print(f"  KNOWN LIMIT (not a check): a fully well-formed forged Tybee entry -> "
-          f"{o_r.get('decision')} '{o_r.get('rule_verdict')}' — the file alone can't prove an approval; "
-          "full fix (chain-tip signing) is post-Nov-4.\n")
+    print(f"  NOTE (not a check): a well-formed Tybee entry SIGNED with the key -> "
+          f"{o_r.get('decision')} '{o_r.get('rule_verdict')}' — the signature is the proof of approval, so "
+          "only the key holder can add one; unsigned forgeries stage (signing_acceptance.py).\n")
     p_v.unlink(missing_ok=True)
 
     ok, _ = verify_chain(RUNS / "persist-e.jsonl")
