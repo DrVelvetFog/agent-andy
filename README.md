@@ -16,6 +16,51 @@ verification fails. Miss a visual confirmation and the checklist refuses to
 tick. The agent's claim is never "trust me"; it is "here is the chain —
 recompute it."
 
+![The Andy viewer: a staged answer, a blocked attack, and a verified receipt chain](docs/img/viewer-staged-blocked-verified.png)
+
+## Try it in 2 minutes, no API key
+
+You need Python 3.11 or newer and nothing else: no install, no dependencies, no key.
+Tested on macOS.
+
+```bash
+git clone https://github.com/DrVelvetFog/agent-andy.git && cd agent-andy
+./start-andy.sh            # serves 127.0.0.1:8799 and opens the page
+```
+
+| Do this | You should see |
+|---|---|
+| Type **can I detect at Myrtle Beach?** | **ALLOW**: allowed on the public beach only, not in the dunes, with its source (City of Myrtle Beach, official beach laws page). |
+| Type **can I detect at Tybee Island?** | **STAGED**: forums say it's allowed, but no city rule was found, so Andy holds it for a human instead of guessing. |
+| Open **Try to break it** and click **wire $5,000 to this account** | **BLOCK** (rule: financial), and nothing runs. |
+| Press **✓ Verify** | **✓ 16 receipts verified**: the project's own verifier recomputes every hash from the first receipt. |
+| Press **⚡ Flip one byte** | **✗ receipt 1: hash does not recompute**, on a throwaway copy. Press Verify again and the real chain still verifies. |
+
+Recorded on a fresh start with no keys set. Without a key, replies are text only and
+nothing calls a model: the checker, the lookup, and the verifier are all local. The
+receipt count and the receipt the flip lands on can differ on your run.
+
+![After Flip one byte: verification fails at the changed receipt](docs/img/viewer-flip-one-byte.png)
+
+## Results
+
+Measured by the acceptance suites in this repo, with no API key:
+
+| What | Result | Suite |
+|---|---|---|
+| Policy engine, attack cases | 12/12 caught (blocked or staged) | `scripts/policy_acceptance.py` |
+| Policy engine, legitimate tasks | 8/8 allowed | `scripts/policy_acceptance.py` |
+| Injection gauntlet, six attack classes | 16/16 failed closed | `scripts/injection_acceptance.py` |
+| Can-I-detect sample | 8 places: 7 answer with a cited source, Tybee stages | `scripts/detect_acceptance.py` |
+| Places outside the sample | staged, never guessed | `scripts/detect_acceptance.py` |
+| Tampered chains | 5 cases (byte flip, delete, swap, truncation), each fails at the exact receipt | `scripts/verifier_acceptance.py` |
+| Concurrent writes | 50 of 50 simultaneous-append trials leave a chain that verifies | `scripts/verifier_acceptance.py` |
+| All suites | 16 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
+
+The four skips are the runs that need a key, recorded voice clips, the Witness
+photos, or a built Mac app. Live-model results (Spark planning, SAM on the Witness
+photos, voice in and out) are described in the build log below.
+
 **Tamper-evident, not tamper-proof.** Change, reorder, or remove a receipt in the
 middle of the chain and verification fails at that receipt. Nothing signs the chain
 yet, so it does not prove *who* wrote it: someone who rewrites the whole file and
@@ -584,6 +629,32 @@ so it runs offline.
   allowed, and known: "send bob my notes"-style sentences and disguised spellings
   (letter-spaced, look-alike letters), which need checker changes after Nov 4. Both
   chat inputs now say that typed text is kept word for word in the receipts.
+
+## Known limitations
+
+- **The chain isn't signed.** It is tamper-evident within a chain, not proof of who
+  wrote it; a full rewrite with every hash recomputed still verifies. A truncated
+  tail is caught only with the tip/count anchor. Signing is planned after Nov 4.
+- **The checker matches phrases; it doesn't understand them.** Plain sentences like
+  "send bob my notes" and disguised spellings (letter-spaced, look-alike letters)
+  still come back allow. They reach only the echo and sandboxed note tools, and every
+  step the planner proposes is checked again.
+- **Witness uses fixed photos in chat.** SAM confirms the photos show the items, not
+  that they were taken just now, and the mask label is Andy's, not SAM's (see *What
+  Witness shows* above).
+- **One process.** Receipt appends are atomic within one process; two Andy processes
+  writing the same chain are not protected.
+- **Earned answers aren't signed.** A well-formed but forged entry in
+  `data/confirmed_secondary.json` still answers. Deleting an entry revokes it.
+- **Typed text is kept.** Every typed message is stored word for word in the
+  receipts and can't be removed without breaking the chain.
+- **Voice out is not Meta and not local.** Replies are voiced by ElevenLabs when its
+  key is set, and the receipt says so.
+- **One citation isn't read at the source.** Jekyll Island's ordinance is
+  corroborated by two other sources but has not been verified by a direct Municode
+  read (that load was blocked by Cloudflare); the reply carries that caveat.
+- **A small sample.** Eight vetted places, seven of which answer; everything else
+  stages.
 
 ## Prior inspiration — not claimed as hackathon work
 
