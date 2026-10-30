@@ -260,15 +260,14 @@ answers **persist across sessions** in a separate, labeled file
 file with their approval date, **still below Tier 1** and still labeled *"Andy read
 the site, not the ordinance; confirm the primary."* They are never merged into the
 Tier 1 fixture and never become a primary citation; a persisted answer is not
-re-fetched automatically (say "verify it" again to refresh it). The file is
-**signed with Andy's key on every approval** (`confirmed_secondary.json.sig`), and
-a file with entries answers only if that signature verifies. A forged entry, or
-any hand edit, breaks it, and then **every entry in the file stages** with the
-reason stated (UNSIGNED or signature FAIL). So deleting an entry by hand revokes
-it and also stages the rest until they're approved again: revoking fails closed.
-An approval never carries an unsigned entry into a newly signed file. If the file
-is missing Andy simply has no earned answers; if it is malformed, Andy stages the
-affected place with the reason stated and never answers from it. Verify-on-demand also fetches only URLs that are already in the
+re-fetched automatically (say "verify it" again to refresh it). **When you approve
+an entry, Andy signs that entry on its own** (a `signature` field over the entry's
+canonical JSON), and an entry answers only if its own signature verifies. A forged entry, a hand edit, or a tampered signature stages **only that
+entry**, with the reason stated (UNSIGNED or signature FAIL); every other entry
+still answers. **Delete an entry to revoke it**: that place stages again and the
+rest are untouched. An approval signs only its own entry, never one already in the
+file. If the file is missing Andy simply has no earned answers; if it is malformed,
+Andy stages the affected place with the reason stated and never answers from it. Verify-on-demand also fetches only URLs that are already in the
 site index; any other URL is refused without a fetch, so the one bit of web Andy
 touches is the index it already holds. In the chat pane, a pending proposal shows its full
 evidence (verdict, verbatim quote, source, date, page URL, and the caveat) with
@@ -709,6 +708,11 @@ so it runs offline.
   VERIFIED, UNSIGNED, or FAIL. A rewrite with recomputed hashes, a truncated tail,
   and a forged earned answer are now caught. `receipts/signing.py`,
   `scripts/signing_acceptance.py`.
+- **Oct 30 (per-entry earned answers):** the earned-answers file's single signature
+  is replaced by one signature per entry, so revoking, deleting, or tampering with
+  one earned answer stages only that one. An entry from the earlier whole-file
+  format carries no signature of its own, so it stages until approved again.
+  Chain-tip signing is unchanged.
 - **Oct 30 (seeded memory active):** the seven standing-policy lines Tony approved are
   live as citations on blocked and staged replies, copied word for word from the
   draft. They change no verdict; `policy.toml` still decides everything.
@@ -730,8 +734,9 @@ so it runs offline.
   which verified, so SAM's failure point hasn't been found yet.
 - **One process.** Receipt appends are atomic within one process; two Andy processes
   writing the same chain are not protected.
-- **Revoking an earned answer stages them all.** Editing the signed earned-answers
-  file by hand breaks its signature, so every entry stages until approved again.
+- **Revocation isn't recorded.** Deleting an earned answer revokes it, but a saved
+  copy of that signed entry, put back later, would answer again: a signature proves
+  an approval happened, not that it hasn't been withdrawn since.
 - **History before Oct 30 isn't re-signed.** Older chains read UNSIGNED, and the
   repo's older commits are not re-signed either.
 - **Typed text is kept.** Every typed message is stored word for word in the

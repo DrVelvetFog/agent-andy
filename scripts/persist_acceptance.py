@@ -30,9 +30,10 @@ automatically. Every property the scope fix must hold, by name:
      for a Tier 1 place still loses to Tier 1, the "<label>, <state>" place form is
      accepted, and a partial-name approval ("Cocoa" -> the Cocoa Beach page) still
      answers after a restart.
-  Every earned-answers file here is signed with a throwaway test key, as the demo
-  signs with Andy's key, so these shape checks run behind a valid signature. An
-  unsigned or forged-signature file stages every entry: signing_acceptance.py.
+  Every earned answer here is signed, entry by entry, with a throwaway test key, as
+  the demo signs with Andy's key, so these shape checks run behind a valid
+  signature. An unsigned or forged-signature entry stages on its own:
+  signing_acceptance.py.
 
 Temp persist files live under runs/ (gitignored); fetch is monkeypatched so the
 core is hermetic while the index-only fetch restriction still applies.
@@ -60,8 +61,12 @@ use_test_key()   # a throwaway key: approvals here are signed, as in the demo
 
 
 def _write_signed(path, data) -> None:
+    """Write hand-made entries, each signed on its own, as approve() would sign them."""
+    for k, e in data.get("entries", {}).items():
+        sig = signing.sign_entry(e) if isinstance(e, dict) else None
+        if sig:
+            data["entries"][k] = dict(e, signature=sig)
     vs._write_persist(path, data)
-    signing.sign_file(path)
 
 RUNS = ROOT / "runs"
 TIER1 = ROOT / "data" / "detect_sample.toml"

@@ -18,14 +18,19 @@ never Andy's real key. A second throwaway key plays the forger.
         stale VERIFIED
      9. the viewer reports the same three states, and a rotated chain keeps its
         signature
-  B. Earned answers (data/confirmed_secondary.json)
-     1. an owner approval with the key signs the file; a fresh session answers
-     2. a forged entry with no signature stages, never answers
-     3. a forged entry signed by a different key stages
-     4. a signed file edited by hand stages
-     5. an approval without the key writes the file UNSIGNED; it stages after restart
-     6. no laundering: a legit approval never signs an unsigned forged entry
-     7. the shipped, empty earned-answers file loads clean with no signature
+  B. Earned answers (data/confirmed_secondary.json), each entry signed on its own;
+     every case has two entries, and the untouched one must still answer
+     1. each approval signs its own entry; a fresh session answers both
+     2. a forged entry with no signature stages alone
+     3. an entry signed by a different key stages alone
+     4. an entry edited by hand stages alone
+     5. a tampered signature stages alone
+     6. revoking one entry by deleting it stages only that place
+     7. an approval without the key leaves that entry UNSIGNED; it stages alone
+     8. no laundering: an approval signs only its own entry
+     9. the old whole-file format is never answered; an approval removes its
+        leftover .sig
+    10. the shipped, empty earned-answers file loads clean
   C. The public example
      1. examples/live-demo-chain.jsonl verifies against data/andy-chain-signing.pub,
         with no key set
@@ -186,12 +191,17 @@ def chains(d: Path) -> None:
         and andy_viewer.verify_with_signature(dest)["signature"] == "VERIFIED")
 
 
-def _approve(store, chain) -> dict:
-    store.pending[vs._norm("Daytona Beach")] = {
-        "place": "Daytona Beach", "url": DAYTONA, "verdict": "Allowed",
-        "quote": "Metal detecting is allowed on the beach.", "source": "City of Daytona Beach",
+PLACES = {"Daytona Beach": DAYTONA,
+          "Cocoa Beach": "https://wheretodetect.org/metal-detecting/florida/cocoa-beach/"}
+
+
+def _approve(path: Path, chain, place="Daytona Beach") -> dict:
+    store = vs.KnowledgeStore(persist_path=path)
+    store.pending[vs._norm(place)] = {
+        "place": place, "url": PLACES[place], "verdict": "Allowed",
+        "quote": "Metal detecting is allowed on the beach.", "source": f"City of {place}",
         "verified_date": "2026-10-28", "page_sha256": "b" * 64}
-    return store.confirm(chain, "Daytona Beach")
+    return store.confirm(chain, place)
 
 
 def _outcome(path: Path, chain, place="Daytona Beach") -> dict:
@@ -202,61 +212,102 @@ def _answered(o) -> bool:
     return o["decision"] in (detect.ANSWERED, detect.ANSWERED_WITH_CAVEAT)
 
 
+def _entries(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))["entries"]
+
+
+def _with_entries(src: Path, dst: Path, change) -> Path:
+    """Copy src's entries to dst, let change() edit them, write dst as-is (no signing)."""
+    entries = _entries(src)
+    change(entries)
+    vs._write_persist(dst, {"note": "t", "entries": entries})
+    return dst
+
+
+def _one_stages(path: Path, chain, bad: str, why: str) -> bool:
+    """`bad` stages with a reason containing `why`; the other place still answers."""
+    o_bad = _outcome(path, chain, bad)
+    o_ok = _outcome(path, chain, "Cocoa Beach" if bad == "Daytona Beach" else "Daytona Beach")
+    return (o_bad["decision"] == detect.STAGED and why in (o_bad.get("persist_error") or "")
+            and _answered(o_ok))
+
+
 def earned_answers(d: Path) -> None:
     ch = ReceiptChain(d / "earned.jsonl")
     p = d / "cs.json"
-    res = _approve(vs.KnowledgeStore(persist_path=p), ch)
-    o1 = _outcome(p, ch)
-    checks["B1. an approval with the key signs the file; a fresh session answers"] = (
-        res.get("signed") is True and signing.verify_file(p)[0] == signing.VERIFIED and _answered(o1))
-    entry = json.loads(p.read_text())["entries"]["daytona beach"]
+    res = [_approve(p, ch, place) for place in PLACES]
+    both = _entries(p)
+    checks["B1. each approval signs its own entry; a fresh session answers both"] = (
+        all(r.get("signed") is True for r in res)
+        and all(signing.verify_entry(e)[0] == signing.VERIFIED for e in both.values())
+        and all(_answered(_outcome(p, ch, place)) for place in PLACES)
+        and not signing.sig_path(p).exists())
 
-    p2 = d / "forged.json"
-    vs._write_persist(p2, {"note": "t", "entries": {"daytona beach": entry}})
-    o2 = _outcome(p2, ch)
-    checks["B2. a forged entry with no signature stages, never answers"] = (
-        o2["decision"] == detect.STAGED and "UNSIGNED" in (o2.get("persist_error") or ""))
+    def forge(entries):   # a well-formed entry nobody signed
+        entries["daytona beach"].pop("signature")
+    checks["B2. a forged entry with no signature stages alone; the other answers"] = _one_stages(
+        _with_entries(p, d / "forged.json", forge), ch, "Daytona Beach", "UNSIGNED")
 
-    p3 = d / "forged-other.json"
-    vs._write_persist(p3, {"note": "t", "entries": {"daytona beach": entry}})
-    with _with_key(_other_key(d)):
-        signing.sign_file(p3)
-    o3 = _outcome(p3, ch)
-    checks["B3. a forged entry signed by a different key stages"] = (
-        o3["decision"] == detect.STAGED and "FAIL" in (o3.get("persist_error") or ""))
+    def foreign(entries):
+        e = {k: v for k, v in entries["daytona beach"].items() if k != "signature"}
+        with _with_key(_other_key(d)):
+            entries["daytona beach"] = dict(e, signature=signing.sign_entry(e))
+    checks["B3. an entry signed by a different key stages alone; the other answers"] = _one_stages(
+        _with_entries(p, d / "foreign.json", foreign), ch, "Daytona Beach", "FAIL")
 
-    p4 = d / "edited.json"
-    p4.write_bytes(p.read_bytes())
-    signing.sig_path(p4).write_text(signing.sig_path(p).read_text())
-    data = json.loads(p4.read_text())
-    data["entries"]["daytona beach"]["verdict"] = "Prohibited"
-    p4.write_text(json.dumps(data, indent=2) + "\n")
-    o4 = _outcome(p4, ch)
-    checks["B4. a signed file edited by hand stages"] = (
-        o4["decision"] == detect.STAGED and "FAIL" in (o4.get("persist_error") or ""))
+    def edit(entries):    # change the content, keep the old signature
+        entries["daytona beach"]["verdict"] = "Prohibited"
+    checks["B4. an entry edited by hand stages alone; the other answers"] = _one_stages(
+        _with_entries(p, d / "edited.json", edit), ch, "Daytona Beach", "FAIL")
 
-    p5 = d / "nokey.json"
+    def bad_sig(entries):  # change the signature, keep the content
+        lines = entries["daytona beach"]["signature"].splitlines()
+        lines[2] = ("B" if lines[2][0] != "B" else "C") + lines[2][1:]
+        entries["daytona beach"]["signature"] = "\n".join(lines) + "\n"
+    checks["B5. a tampered signature stages alone; the other answers"] = _one_stages(
+        _with_entries(p, d / "badsig.json", bad_sig), ch, "Daytona Beach", "FAIL")
+
+    def revoke(entries):  # the owner deletes one entry by hand
+        del entries["daytona beach"]
+    rv = _with_entries(p, d / "revoked.json", revoke)
+    o_gone, o_kept = _outcome(rv, ch, "Daytona Beach"), _outcome(rv, ch, "Cocoa Beach")
+    checks["B6. revoking one entry (deleting it) stages only that place; the other answers"] = (
+        o_gone["decision"] == detect.STAGED and not o_gone.get("persist_error") and _answered(o_kept)
+        and signing.verify_entry(_entries(rv)["cocoa beach"])[0] == signing.VERIFIED)
+
+    p7 = d / "nokey.json"
+    _approve(p7, ch, "Cocoa Beach")
     with _with_key(None):
-        res5 = _approve(vs.KnowledgeStore(persist_path=p5), ch)
-    o5 = _outcome(p5, ch)
-    checks["B5. an approval without the key writes the file UNSIGNED; it stages after restart"] = (
-        res5.get("ok") and res5.get("signed") is False and not signing.sig_path(p5).exists()
-        and o5["decision"] == detect.STAGED)
+        r7 = _approve(p7, ch, "Daytona Beach")
+    checks["B7. an approval without the key leaves that entry UNSIGNED; it stages alone after restart"] = (
+        r7.get("ok") and r7.get("signed") is False and "signature" not in _entries(p7)["daytona beach"]
+        and _one_stages(p7, ch, "Daytona Beach", "UNSIGNED"))
 
-    p6 = d / "launder.json"
-    forged = dict(entry, place="Tybee Island",
-                  url="https://wheretodetect.org/metal-detecting/georgia/tybee-island/")
-    vs._write_persist(p6, {"note": "t", "entries": {"tybee island": forged}})
-    _approve(vs.KnowledgeStore(persist_path=p6), ch)
-    after = json.loads(p6.read_text())["entries"]
-    checks["B6. no laundering: a legit approval never signs an unsigned forged entry"] = (
-        "tybee island" not in after and "daytona beach" in after
-        and signing.verify_file(p6)[0] == signing.VERIFIED and _answered(_outcome(p6, ch))
-        and _outcome(p6, ch, "Tybee Island")["decision"] == detect.STAGED)
+    p8 = d / "launder.json"
+    tybee = dict({k: v for k, v in both["daytona beach"].items() if k != "signature"},
+                 place="Tybee Island", url="https://wheretodetect.org/metal-detecting/georgia/tybee-island/")
+    vs._write_persist(p8, {"note": "t", "entries": {"tybee island": tybee}})
+    _approve(p8, ch, "Daytona Beach")
+    after = _entries(p8)
+    checks["B8. no laundering: an approval signs only its own entry, never an unsigned one"] = (
+        "signature" not in after["tybee island"]
+        and signing.verify_entry(after["daytona beach"])[0] == signing.VERIFIED
+        and _outcome(p8, ch, "Tybee Island")["decision"] == detect.STAGED
+        and _answered(_outcome(p8, ch, "Daytona Beach")))
+
+    p9 = d / "oldformat.json"   # the earlier format: no per-entry signature, a whole-file .sig
+    _with_entries(p, p9, lambda es: [e.pop("signature") for e in es.values()])
+    signing.sig_path(p9).write_text(signing.sig_path(p9).name)   # any leftover sidecar
+    staged9 = [_outcome(p9, ch, place)["decision"] == detect.STAGED for place in PLACES]
+    _approve(p9, ch, "Cocoa Beach")
+    checks["B9. the old whole-file format is never answered; an approval removes its leftover .sig"] = (
+        all(staged9) and not signing.sig_path(p9).exists()
+        and _answered(_outcome(p9, ch, "Cocoa Beach"))
+        and _outcome(p9, ch, "Daytona Beach")["decision"] == detect.STAGED)
 
     shipped = vs.KnowledgeStore(persist_path=ROOT / "data" / "confirmed_secondary.json")
-    checks["B7. the shipped, empty earned-answers file loads clean with no signature"] = (
-        shipped.confirmed == {} and shipped.persist_error is None and shipped.signature_problem is None)
+    checks["B10. the shipped, empty earned-answers file loads clean"] = (
+        shipped.confirmed == {} and shipped.persist_error is None and shipped.signature_problems == {})
 
 
 def public_example(d: Path) -> None:

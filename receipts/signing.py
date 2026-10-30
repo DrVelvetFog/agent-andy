@@ -4,7 +4,8 @@ public key in data/andy-chain-signing.pub can check a signature; only the holder
 of the private key can make one.
 
 ADDITIVE: the receipt format, genesis, and the hash verifier are unchanged. A
-signature lives in a sidecar file next to what it signs (<file>.sig).
+chain's signature lives in a sidecar file next to it (<chain>.sig); an earned
+answer carries its own signature in a "signature" field.
 
 What gets signed:
   * a chain's TIP — the receipt count and the last receipt's hash (tip_message).
@@ -12,8 +13,12 @@ What gets signed:
     for the whole chain; a rewrite, an append, or a truncated tail no longer
     matches the signed tip. The tip is re-signed after EVERY append (the trigger),
     so a signed chain is always signed up to its last receipt.
-  * the earned-answers file (data/confirmed_secondary.json), byte for byte, on
-    every owner approval.
+  * each earned answer in data/confirmed_secondary.json, ON ITS OWN, when the
+    owner approves it: the signature covers entry_message(entry), the entry
+    without its "signature" field in canonical JSON (sorted keys, no spaces,
+    UTF-8; the same encoding receipts use). Revoking, deleting, or tampering
+    with one entry affects only that entry. This replaced an earlier
+    whole-file signature, under which any hand edit staged every entry.
 
 Three states, never conflated:
   VERIFIED  the signature checks against Andy's public key
@@ -22,7 +27,7 @@ Three states, never conflated:
   FAIL      a signature is present and does not verify
 
 A signature proves only that the holder of Andy's signing key signed that tip or
-file at that time; it does not prove the content is true.
+entry at that time; it does not prove the content is true.
 
 Fail closed: no key, a key ssh-keygen can't use, or any signing error means no
 signature is written (and a stale one is removed), so the result reads UNSIGNED,
@@ -48,7 +53,7 @@ PUBKEY_FILE = ROOT / "data" / "andy-chain-signing.pub"
 
 VERIFIED, UNSIGNED, FAIL = "VERIFIED", "UNSIGNED", "FAIL"
 CHAIN_NAMESPACE = "andy-chain-tip"
-FILE_NAMESPACE = "andy-earned-answers"
+ENTRY_NAMESPACE = "andy-earned-answer"
 _PRINCIPAL = "andy"
 _TIMEOUT = 10
 
@@ -141,10 +146,16 @@ def sign_tip(path, count: int, tip_hash: str) -> bool:
     return _write_sig(Path(path), sign_bytes(tip_message(count, tip_hash), CHAIN_NAMESPACE))
 
 
-def sign_file(path) -> bool:
-    """Sign a file's exact bytes into <file>.sig."""
-    path = Path(path)
-    return _write_sig(path, sign_bytes(path.read_bytes(), FILE_NAMESPACE))
+def entry_message(entry: dict) -> bytes:
+    """The exact bytes an earned-answer signature covers: the entry without its
+    "signature" field, in canonical JSON (sorted keys, no spaces, UTF-8)."""
+    from .chain import canonical   # deferred: chain imports this module
+    return canonical({k: v for k, v in entry.items() if k != "signature"})
+
+
+def sign_entry(entry: dict) -> str | None:
+    """A signature for one earned answer, or None if signing isn't possible."""
+    return sign_bytes(entry_message(entry), ENTRY_NAMESPACE)
 
 
 def _read_sig(path: Path) -> str | None:
@@ -179,13 +190,13 @@ def chain_signature(path) -> tuple[str, str]:
     return verify_tip(path, len(lines), tip)
 
 
-def verify_file(path) -> tuple[str, str]:
-    path = Path(path)
-    signature = _read_sig(path)
-    if signature is None:
-        return UNSIGNED, "no signature file"
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return FAIL, "file unreadable"
-    return verify_bytes(data, signature, FILE_NAMESPACE)
+def verify_entry(entry) -> tuple[str, str]:
+    """(state, reason) for one earned answer's own signature."""
+    if not isinstance(entry, dict):
+        return FAIL, "entry is not an object"
+    signature = entry.get("signature")
+    if not signature:
+        return UNSIGNED, "no signature on this entry"
+    if not isinstance(signature, str) or not signature.isascii():
+        return FAIL, "signature is not an SSH signature"
+    return verify_bytes(entry_message(entry), signature, ENTRY_NAMESPACE)
