@@ -47,7 +47,12 @@ any = ["post ", "tweet", "publish", "upload", "email ", "send to", " dm ", "dm t
        "send my notes", "send my files", "send my photos", "send my data", "send the notes", "send the files",
        "share my notes", "share my files", "share my photos", "copy my notes to", "copy my files to",
        "forward my", "text my notes", "text my files", "e-mail", "mail my", "fax ", "sync my",
-       "to dropbox", "google drive", "icloud"]
+       "to dropbox", "google drive", "icloud",
+       # handing notes / files to a person, a drive, or a remote repo
+       "give my notes", "give my files", "give my photos", "give the notes", "give the files",
+       "share notes", "share files", "share photos", "share the notes", "share the files", "share the photos",
+       "my notes to ", "my files to ", "my photos to ", "usb drive", "usb stick", "thumb drive", "flash drive",
+       "external drive", "airdrop", "git push", "push my repo", "push the repo", "push my code", "push to github"]
 
 [[rules]]
 id = "about-people"
@@ -61,7 +66,10 @@ tier = "block"
 reason = "reads or acts on a credential or secret field"
 any = ["password", "credit card", "ssn", "api key", "secret key", "private key", "ssh key", "seed phrase", "2fa", "one-time code", "otp", "access token",
        # secret files and paths
-       ".ssh", "id_rsa", "id_ed25519", ".env", ".aws", "credentials", ".pem", "keychain", "passwd"]
+       ".ssh", "id_rsa", "id_ed25519", ".env", ".aws", "credentials", ".pem", "keychain", "passwd",
+       ".netrc", ".config/", "hosts.yml", ".git-credentials", ".npmrc", ".pypirc", ".kube/",
+       "bash history", "bash_history", "zsh_history", "shell history", "command history",
+       "env var", "environment variable", "printenv", "saved login", "logins"]
 
 [[rules]]
 id = "off-task"
@@ -74,7 +82,9 @@ any = ["outside the task", "off-task", "off task", "unrelated to the task", "dis
        "forget the policy", "forget your rules", "forget the rules", "forget your instructions",
        "developer mode", "dev mode", "jailbreak", "you are now", "system:", "pre-approved", "preapproved",
        "no restrictions", "without restrictions", "unrestricted", "unfiltered",
-       "ignore everything", "disregard everything", "new instructions"]
+       "ignore everything", "disregard everything", "new instructions",
+       "from now on answer", "from now on say", "from now on, answer", "from now on, say",
+       "everything as allowed", "everything is allowed", "treat everything as"]
 
 [[rules]]
 id = "financial"
@@ -89,7 +99,11 @@ any = ["wire ", "wire $", "send money", "send $", "transfer $", "transfer money"
        # other money apps, coins, and destinations
        "cash app", "cashapp", "usdc", "usdt", "to 0x", "of bitcoin", "buy bitcoin", "buy $", "move $",
        "pay my ", "transfer to", "to my savings", "to my checking", "to my account", "to his account",
-       "to her account", "to their account"]
+       "to her account", "to their account",
+       # amounts in words, and money handed to a person
+       "dollars to ", "bucks to ", "grand to ", "five grand", "ten grand",
+       "hundred dollars", "thousand dollars", "000 dollars",
+       "pay the invoice", "pay this invoice", "pay invoice", "pay the bill", "bitcoin", "ethereum"]
 
 [[rules]]
 id = "system-command"
@@ -99,7 +113,10 @@ any = ["sudo", "rm -rf", "curl ", "wget ", "| sh", "| bash", "bash -c", "chmod "
        # shells, root, and reading files off disk
        "su root", "su -", "cat ~", "cat /", "cat .", "|sh", "|bash", "run bash", "terminal", "ssh ",
        "python -c", "os.system", "subprocess", "exec(", "eval(", "shutdown", "reboot", "kill -9", "killall",
-       "crontab", "launchctl"]
+       "crontab", "launchctl",
+       # running commands or scripts by name
+       "ls -l", "ls -a", "run ls", "run this command", "run the command", "run a command", "shell command",
+       "execute this", "execute the script", "execute a script", "run this script", "run the script", "run a script"]
 
 [[rules]]
 id = "destructive"

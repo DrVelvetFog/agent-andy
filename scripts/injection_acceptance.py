@@ -56,6 +56,10 @@ def detect_case(chain, cls, name, query, strict=False):
 
 def voice_case(chain, cls, name, transcript):
     res = voice.handle(chain, transcript, voice.INJECTED, voice=False)
+    if "result" not in res:  # refused by the checker before any lookup: caught if nothing ran
+        v = res["verdict"]
+        rec(cls, name, v["verdict"], v["reason"], v["verdict"] in CAUGHT and not res["executed"])
+        return
     o = res["result"]["outcome"]
     reason = o["staging_reason"] or f"verdict={o['rule_verdict']}"
     rec(cls, name, o["decision"], reason, o["decision"] == detect.STAGED)
