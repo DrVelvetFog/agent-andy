@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import filelock
 from .chain import GENESIS, digest
 
 
@@ -30,8 +31,9 @@ def verify_chain(path, expect_tip: str | None = None, expect_count: int | None =
     """Return (ok, reason). ok is True only if every receipt verifies AND any
     anchor supplied (tip hash, receipt count) matches the chain on disk."""
     try:
-        text = Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as e:
+        with filelock.shared_if_present(path):   # never a half-written line
+            text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError, filelock.LockTimeout) as e:
         return False, f"unreadable: {e}"
 
     lines = [l for l in text.splitlines() if l.strip()]

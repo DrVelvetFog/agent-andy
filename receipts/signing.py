@@ -48,6 +48,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from . import filelock
+
 ROOT = Path(__file__).resolve().parent.parent
 PUBKEY_FILE = ROOT / "data" / "andy-chain-signing.pub"
 
@@ -168,7 +170,10 @@ def _read_sig(path: Path) -> str | None:
 def verify_tip(path, count: int, tip_hash: str) -> tuple[str, str]:
     """(state, reason) for a chain whose hashes already verified, given its
     receipt count and last receipt hash."""
-    signature = _read_sig(Path(path))
+    return _check_tip(count, tip_hash, _read_sig(Path(path)))
+
+
+def _check_tip(count: int, tip_hash: str, signature: str | None) -> tuple[str, str]:
     if signature is None:
         return UNSIGNED, "no signature file"
     state, reason = verify_bytes(tip_message(count, tip_hash), signature, CHAIN_NAMESPACE)
@@ -181,13 +186,18 @@ def verify_tip(path, count: int, tip_hash: str) -> tuple[str, str]:
 
 def chain_signature(path) -> tuple[str, str]:
     """(state, reason) for a chain file. Call it only after verify_chain passed: it
-    reads the count and tip from the file and checks the sidecar against them."""
+    reads the count and tip from the file and checks the sidecar against them. The
+    chain and its .sig are read together under the shared lock, so a writer can
+    never slip a new receipt in between them; ssh-keygen runs after the lock."""
     try:
-        lines = [l for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]
-        tip = json.loads(lines[-1])["hash"]
-    except (OSError, UnicodeDecodeError, IndexError, KeyError, TypeError, ValueError):
+        with filelock.shared_if_present(path):
+            lines = [l for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]
+            tip = json.loads(lines[-1])["hash"]
+            signature = _read_sig(Path(path))
+    except (OSError, UnicodeDecodeError, IndexError, KeyError, TypeError, ValueError,
+            filelock.LockTimeout):
         return FAIL, "chain unreadable for the signature check"
-    return verify_tip(path, len(lines), tip)
+    return _check_tip(len(lines), tip, signature)
 
 
 def verify_entry(entry) -> tuple[str, str]:

@@ -7,3 +7,6 @@ runs/
 /.env.local
 # Generated Mac app launcher bundle (built by scripts/build_mac_app.sh)
 /AgentAndy.app/
+# Cross-process lock files (receipts/filelock.py); never deleted, never committed
+*.jsonl.lock
+/data/*.lock

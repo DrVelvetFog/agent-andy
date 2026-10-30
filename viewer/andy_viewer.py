@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from receipts import ReceiptChain, signing, verify_chain  # noqa: E402  (after sys.path insert)
+from receipts.chain import chain_lock  # noqa: E402
 from agent import voice  # noqa: E402  — the real gated chat path (typed + spoken share it)
 from agent.verify_source import KnowledgeStore  # noqa: E402  — verify-on-demand session memory
 
@@ -64,7 +65,13 @@ def _rotate(path: Path) -> Path | None:
     (chat-live-YYYYMMDD-HHMMSS.jsonl, UTC, then -1, -2, … if taken) and return it.
     The bytes are untouched, so the archive still verifies, and it stays listable
     like any other chain. Never overwrites an archive. Its signature, if any, moves
-    with it. A missing or empty file is left alone and returns None."""
+    with it. A missing or empty file is left alone and returns None. Held under
+    chain_lock, so no other process can append mid-rotation."""
+    with chain_lock(path):
+        return _rotate_locked(path)
+
+
+def _rotate_locked(path: Path) -> Path | None:
     if not path.exists() or path.stat().st_size == 0:
         return None
     stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
@@ -238,7 +245,7 @@ def read_chain(name: str) -> list[dict]:
     path = _safe_path(name)
     if path is None or not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return ReceiptChain(path).receipts()   # the shared lock: never a half-written line
 
 
 def _safe_path(name: str) -> Path | None:

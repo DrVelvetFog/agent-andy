@@ -57,8 +57,9 @@ Measured by the acceptance suites in this repo, with no API key:
 | Places outside the sample | staged, never guessed | `scripts/detect_acceptance.py` |
 | Tampered chains | 5 cases (byte flip, delete, swap, truncation), each fails at the exact receipt | `scripts/verifier_acceptance.py` |
 | Concurrent writes | 50 of 50 simultaneous-append trials leave a chain that verifies | `scripts/verifier_acceptance.py` |
+| Concurrent processes | 4 processes × 25 appends: 100 receipts, none lost or duplicated, signed tip VERIFIED | `scripts/multiprocess_acceptance.py` |
 | Chain and earned-answer signing | a rewrite with recomputed hashes, a truncated tail, a tampered or foreign signature: FAIL; no signature: UNSIGNED; a forged earned answer: staged | `scripts/signing_acceptance.py` |
-| All suites | 17 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
+| All suites | 18 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
 
 The four skips are the runs that need a key, recorded voice clips, the Witness
 photos, or a built Mac app. **Run with the keys, clips, and photos on Oct 30, the
@@ -713,6 +714,12 @@ so it runs offline.
   one earned answer stages only that one. An entry from the earlier whole-file
   format carries no signature of its own, so it stages until approved again.
   Chain-tip signing is unchanged.
+- **Oct 30 (multi-process lock):** chain appends, tip signing, chain rotation, and
+  earned-answer approvals now hold an OS file lock (`flock` on `<file>.lock`) across
+  processes, taken after the existing in-process lock, never before. Readers,
+  including the verifier, take a shared lock. A writer that can't get the lock in
+  15 seconds writes nothing and raises an error. Mac/Unix only.
+  `receipts/filelock.py`, `scripts/multiprocess_acceptance.py`.
 - **Oct 30 (seeded memory active):** the seven standing-policy lines Tony approved are
   live as citations on blocked and staged replies, copied word for word from the
   draft. They change no verdict; `policy.toml` still decides everything.
@@ -732,8 +739,12 @@ so it runs offline.
   that they were taken just now, and the mask label is Andy's, not SAM's (see *What
   Witness shows* above). The Oct 30 stress run tried four more cable photos, all of
   which verified, so SAM's failure point hasn't been found yet.
-- **One process.** Receipt appends are atomic within one process; two Andy processes
-  writing the same chain are not protected.
+- **Locking is Mac/Unix only, and the notes file isn't locked.** Chain appends, tip
+  signatures, chain rotation, and earned-answer approvals are locked across processes
+  with `flock` (four processes racing on one chain lose and duplicate nothing). There
+  is no Windows support. The sandboxed notes file (`runs/sandbox/notes.txt`) is
+  appended without a lock: notes aren't part of the proof, and every note is also a
+  receipt.
 - **Revocation isn't recorded.** Deleting an earned answer revokes it, but a saved
   copy of that signed entry, put back later, would answer again: a signature proves
   an approval happened, not that it hasn't been withdrawn since.

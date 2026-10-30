@@ -23,7 +23,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from receipts import signing
+from receipts import filelock, signing
 
 from . import tier2
 
@@ -490,8 +490,15 @@ class KnowledgeStore:
         signed; every other entry is carried over exactly as it was, with its own
         signature or none, so signing never launders an entry nobody signed. Without
         the key the new entry is written UNSIGNED and stages after a restart. A
-        leftover whole-file signature (the earlier format) is removed. Returns whether
-        the new entry is signed."""
+        leftover whole-file signature (the earlier format) is removed. The whole
+        read-modify-write runs under an exclusive lock on <file>.lock (Mac/Unix), so
+        two processes approving at once never drop each other's entry or share the
+        .tmp file; past filelock.LOCK_TIMEOUT it raises and writes nothing. Returns
+        whether the new entry is signed."""
+        with filelock.exclusive(self.persist_path):
+            return self._persist_put_locked(key, entry)
+
+    def _persist_put_locked(self, key: str, entry: dict) -> bool:
         data = {"note": _PERSIST_NOTE, "entries": {}}
         if self.persist_path.exists():
             try:
