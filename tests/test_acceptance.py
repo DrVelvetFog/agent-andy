@@ -7,8 +7,10 @@ and ELEVENLABS_API_KEY unset and the network forced to a dead proxy.
 Exit 0 is a pass. A suite that cannot run here is a SKIP that says why, never a
 silent pass: gated_loop's PASS-BY-FALLBACK (exit 3), injection's L3 control
 with no witness photos or key, voice_live_run with no clips, and macapp with no
-built .app. Each skip is matched on the suite's own output, so any other
-non-zero exit is a FAIL.
+built .app. In a checkout that has the Witness photos or voice clips, the
+suites that would use them need MODEL_API_KEY, which this run unsets, so those
+skip too (voice_acceptance's Witness path, voice_live_run). Each skip is
+matched on the suite's own output, so any other non-zero exit is a FAIL.
 
 Warning: macapp_acceptance kills any running viewer (pkill -f andy_viewer.py).
 Never run this while the viewer is up.
@@ -50,21 +52,33 @@ def _injection_only_l3(out: str) -> bool:
             and fails == ["[FAIL] L3 Witness ships on real photos"])
 
 
-# suite stem -> (exit code, does the output match, skip reason)
+def _voice_only_witness(out: str) -> bool:
+    # Photos are present, so path c called SAM with no key; it is the ONLY failing check.
+    fails = [ln.strip() for ln in out.splitlines() if ln.strip().startswith("[FAIL]")]
+    return fails == ["[FAIL] c) witness ran 3 observations and shipped"]
+
+
+# suite stem -> [(exit code, does the output match, skip reason), ...]
 SKIPS = {
-    "gated_loop_acceptance": (
+    "gated_loop_acceptance": [(
         3, lambda out: "PASS-BY-FALLBACK" in out,
-        "PASS-BY-FALLBACK: Spark not called (no MODEL_API_KEY); gate, receipts and verifier passed"),
-    "injection_acceptance": (
+        "PASS-BY-FALLBACK: Spark not called (no MODEL_API_KEY); gate, receipts and verifier passed")],
+    "injection_acceptance": [(
         1, _injection_only_l3,
         "L3 needs real photos in runs/witness/ and MODEL_API_KEY (unset here); "
-        "every attack failed closed and the other controls passed"),
-    "voice_live_run": (
+        "every attack failed closed and the other controls passed")],
+    "voice_acceptance": [(
+        1, _voice_only_witness,
+        "photos are in runs/witness/, so the Witness path calls SAM, which needs MODEL_API_KEY "
+        "(unset here); every other voice check passed")],
+    "voice_live_run": [(
         1, lambda out: "VOICE LIVE RUN: FAIL (no clips)" in out,
-        "no voice clips in runs/voice/ (and it needs MODEL_API_KEY); nothing was transcribed"),
-    "macapp_acceptance": (
+        "no voice clips in runs/voice/ (and it needs MODEL_API_KEY); nothing was transcribed"), (
+        1, lambda out: "MODEL_API_KEY is not set" in out,
+        "clips are in runs/voice/, but transcribing them needs MODEL_API_KEY (unset here)")],
+    "macapp_acceptance": [(
         1, lambda out: "FAIL (.app not built)" in out,
-        "AgentAndy.app not built; run `bash scripts/build_mac_app.sh` first"),
+        "AgentAndy.app not built; run `bash scripts/build_mac_app.sh` first")],
 }
 
 
@@ -79,9 +93,9 @@ def _make_test(script: Path):
         out = proc.stdout + proc.stderr
         if proc.returncode == 0:
             return
-        skip = SKIPS.get(script.stem)
-        if skip and proc.returncode == skip[0] and skip[1](out):
-            self.skipTest(skip[2])
+        for code, matches, reason in SKIPS.get(script.stem, []):
+            if proc.returncode == code and matches(out):
+                self.skipTest(reason)
         tail = "\n".join(out.splitlines()[-25:])
         self.fail(f"{script.name} exited {proc.returncode}\n{tail}")
     return test
