@@ -17,8 +17,10 @@ the launcher's contract:
      no curl to any other host.
   hygiene: Info.plist asks for no camera / microphone / location / files access
      and no entitlements; the bundle is unsigned with no signing artifacts; no
-     image asset is committed; and the README makes no signing / notarization /
-     distribution claim (and does state it is unsigned and not an installer).
+     image or icon asset is committed (the README's screenshots in docs/img/ are
+     the one exception, and never an icon); and the README makes no signing /
+     notarization / distribution claim (and does state it is unsigned and not an
+     installer).
 """
 
 from __future__ import annotations
@@ -154,10 +156,16 @@ def main() -> int:
         and not list(APP.rglob("embedded.provisionprofile")))
 
     # ---- hygiene: no committed image asset ----
+    # The app icon is generated locally, never committed. The README's screenshots
+    # in docs/img/ are documentation, the one exception, and never an .icns/.ico.
     tracked = _git("ls-files").stdout.lower().splitlines()
     img_ext = (".png", ".jpg", ".jpeg", ".gif", ".icns", ".ico", ".bmp", ".webp", ".tiff")
-    checks["hygiene: no image/icon asset is committed (icon is generated locally)"] = (
-        not any(p.endswith(img_ext) for p in tracked))
+    images = [p for p in tracked if p.endswith(img_ext)
+              and not (p.startswith("docs/img/") and p.endswith((".png", ".jpg", ".jpeg")))]
+    checks["hygiene: no image/icon asset is committed (icon is generated locally; docs/img/ screenshots excepted)"] = (
+        not images)
+    if images:
+        print("   committed image/icon assets:", images)
 
     # ---- hygiene: README makes no signing/notarization/distribution claim ----
     # Collapse whitespace so line wraps don't hide a claim (in either direction).
