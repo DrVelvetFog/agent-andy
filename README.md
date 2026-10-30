@@ -1,6 +1,6 @@
 # Agent Andy
 
-A voice-driven personal agent that cannot act without leaving a receipt.
+A personal agent that cannot act without leaving a receipt.
 
 **What it's for:** an agent that checks a local rule before you act, and *proves*
 its answer. It ships with one example — whether you can legally metal-detect at a
@@ -16,6 +16,19 @@ verification fails. Miss a visual confirmation and the checklist refuses to
 tick. The agent's claim is never "trust me"; it is "here is the chain —
 recompute it."
 
+**Tamper-evident, not tamper-proof.** Change, reorder, or remove a receipt in the
+middle of the chain and verification fails at that receipt. Nothing signs the chain
+yet, so it does not prove *who* wrote it: someone who rewrites the whole file and
+recomputes every hash gets a chain that still verifies. Signing the chain tip is
+planned for after Nov 4.
+
+**What Witness shows.** SAM confirms that a photo shows each item on the list. It
+does not show the photo was taken just now: in chat, "witness my packing list"
+checks the same three photos every time (Razr shots from Oct 27, kept locally in
+`runs/witness/`), and nothing checks when a photo was taken. The mask label in the
+receipt (`cable#0`) is written by Andy, not returned by SAM; SAM's own result is
+recorded as the mask count and how much of the frame the largest mask covers.
+
 Built solo by Tony Jagodka, with AI assistance as described below, for the
 **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4, 2026) · **Indie
 Developer** track · theme: **Build for Your World**.
@@ -24,10 +37,10 @@ Developer** track · theme: **Build for Your World**.
 
 | Part | What it is | Model |
 |---|---|---|
-| Brain | proposes actions from voice input | Muse Spark (`muse-spark-1.3`, Meta Model API) |
+| Brain | proposes actions from typed or spoken input | Muse Spark (`muse-spark-1.3`, Meta Model API) |
 | Checker | rules on every proposed action, in its own trust domain | **Deterministic policy engine** — local, no model, no network (`agent/policy.toml`) |
 | Rule check | answers "can I detect here?" with a cited source, or stages it | deterministic lookup + evidence gate — `agent/detect.py` |
-| Eyes | verified observation for Witness receipts | SAM 3.1 (`sam-3.1`, Meta Model API) |
+| Eyes | checks that a photo shows each item, for Witness receipts | SAM 3.1 (`sam-3.1`, Meta Model API) |
 | Voice in | speech to text | Muse Voice Transcribe |
 | Voice out | spoken reply, declared non-Meta and non-local | ElevenLabs (`eleven_v4`) via stdlib — `agent/tts.py` |
 | Daemon | one proactive, dismissible suggestion after a task stages something | gated + receipted, never executes — `agent/daemon.py` |
@@ -437,7 +450,8 @@ so it runs offline.
   `scripts/detect_acceptance.py`. Deterministic and local.
 - **Oct 27 (Witness — verified observation):** `agent/eyes.py` calls SAM 3.1
   and `agent/witness.py` runs a packing checklist — each item verifies only if
-  SAM segments it in a real photo, the photo hash + mask id land in the receipt,
+  SAM segments it in a real photo, the photo hash, SAM's mask count and coverage,
+  and a local mask label land in the receipt,
   and the box is marked shipped only when every item verifies (fail-closed,
   naming any that doesn't). Proven on real Razr photos: cable, book, charger all
   segmented → READY TO SHIP. `scripts/witness_acceptance.py`.
@@ -546,6 +560,30 @@ so it runs offline.
   **allow** on purpose: ordinary conversation must reach the Spark loop, where every
   step the planner proposes is checked again. `scripts/attackable_acceptance.py`,
   `scripts/voice_acceptance.py`.
+- **Oct 29 (fixes from a read-only audit):** the trip task states the actual rule
+  verdict, and a caveated answer holds the note; a blocked detect request replies
+  with the checker's verdict instead of crashing; chain appends are atomic under
+  concurrent requests within one process; a viewer restart archives the live chain
+  instead of deleting it; the checker rules on a tool's payload as well as its
+  summary; the viewer's POST and GET routes require a local Origin/Host, and POSTs a
+  JSON body (the Mic upload takes `audio/wav`); verify-on-demand checks every
+  redirect and no longer fetches on a loose name match; earned answers are validated
+  when loaded (a well-formed but forged entry still answers until entries are signed,
+  after Nov 4); the viewer and policy text name where data actually goes; and the
+  acceptance suites report fallbacks and missing prerequisites instead of passing.
+- **Oct 29 (Mic button and viewer redesign):** the Mic button records a spoken turn
+  in the page and sends it through the same checker-first gate as typed chat (see
+  *Speak in the viewer*). The viewer gets a cleaner layout with one-line receipts
+  and a collapsible "Try to break it" panel, all controls kept. Voice receipts say a
+  reply was spoken only when it actually was, and otherwise state the real reason.
+- **Oct 30 (tests and gaps):** `python3 -m unittest discover tests` runs every
+  acceptance suite, skipping with a reason any that needs a key, clips, photos, or a
+  built `.app`. `policy.toml` gains patterns for plain phrasings that were falling
+  through to allow (amounts in words, secret files and shell history, running
+  commands or scripts, handing notes or files to a person, drive, or repo). Still
+  allowed, and known: "send bob my notes"-style sentences and disguised spellings
+  (letter-spaced, look-alike letters), which need checker changes after Nov 4. Both
+  chat inputs now say that typed text is kept word for word in the receipts.
 
 ## Prior inspiration — not claimed as hackathon work
 
