@@ -472,7 +472,7 @@ written. A request with a blocked extra, such as "…and wire $5,000 for the tri
 refused as a whole by the checker on the raw message — nothing in it runs, not even
 the safe steps — and the refusal is receipted. `scripts/multistep_acceptance.py`.
 
-## Seeded memory — citable refusals (mechanism only, not yet active)
+## Seeded memory — citable refusals (active since Oct 30)
 
 Refusals are governed by `policy.toml`, and always will be. Seeded memory is a thin
 **citation** layer on top: standing policy in the owner's own words, shown *beside* a
@@ -484,10 +484,14 @@ anything; the match is a deterministic category→rule mapping in code, never mo
 inference. **`policy.toml` wins every conflict:** a line that would allow something
 policy blocks is *not* cited, and the conflict is stated in the receipt.
 
-The active list (`agent/policy.py` `SEEDED_FACTS`) is **empty**, and stays empty until
-the owner approves lines **one by one**. The proposed lines live in
-`docs/seeded-memory-draft.md` (headed DRAFT · NOT ACTIVE · NOT LOADED) — Andy never
-loads that file, and **no line is live**. `scripts/seeded_acceptance.py`.
+The active list (`agent/policy.py` `SEEDED_FACTS`) holds **seven lines**, one per
+blocking or staging rule: exfiltration, financial, destructive (stage), secret fields,
+off-task, system commands, and comments about people. Tony approved them on Oct 30,
+and a separate commit copied them word for word from `docs/seeded-memory-draft.md`.
+Andy never loads that file; it stays as the draft record. A blocked "wire $5,000"
+now cites *"Andy never moves money — no wires, transfers, or payments from my
+accounts"* beside the policy reason; an allowed question cites nothing.
+`scripts/seeded_acceptance.py`.
 
 ## Try the daemon test
 
@@ -697,6 +701,9 @@ so it runs offline.
   VERIFIED, UNSIGNED, or FAIL. A rewrite with recomputed hashes, a truncated tail,
   and a forged earned answer are now caught. `receipts/signing.py`,
   `scripts/signing_acceptance.py`.
+- **Oct 30 (seeded memory active):** the seven standing-policy lines Tony approved are
+  live as citations on blocked and staged replies, copied word for word from the
+  draft. They change no verdict; `policy.toml` still decides everything.
 
 ## Known limitations
 

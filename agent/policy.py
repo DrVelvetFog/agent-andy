@@ -52,13 +52,37 @@ DISMISSAL_SCOPE = "session"
 # so, and here is the receipt," not as a model opinion. A seeded line never allows,
 # blocks, or stages anything: policy.toml is canonical and WINS every conflict.
 #
-# The ACTIVE list stays EMPTY until the owner approves lines one by one (the drafts
-# live in docs/seeded-memory-draft.md, which Andy never loads). Each active line is
+# The ACTIVE list holds the seven lines the owner approved on Oct 30, 2026, copied
+# word for word from docs/seeded-memory-draft.md (which Andy never loads; it stays
+# the draft record). Approval alone activated nothing: these lines were moved here
+# in their own commit. Each active line is
 # {category, text, source, asserts}: `category` maps (below, explicitly) to the
 # checker rule-ids it may be cited for; `asserts` is "refuse" for a real standing
 # refusal, and a line that "allow"s something policy blocks is reported as a
 # conflict and NOT cited.
-SEEDED_FACTS: list[dict] = []
+SEEDED_FACTS: list[dict] = [
+    {"category": "no-exfiltration",
+     "text": "Nothing of mine leaves this machine on its own — Andy doesn't post, upload, email, or send my files or data anywhere.",
+     "source": "policy.toml rule 'exfiltration' (block)", "asserts": "refuse"},
+    {"category": "no-unapproved-financial",
+     "text": "Andy never moves money — no wires, transfers, or payments from my accounts.",
+     "source": "policy.toml rule 'financial' (block)", "asserts": "refuse"},
+    {"category": "no-destructive-without-approval",
+     "text": "Destructive actions wait for me — deleting, overwriting, wiping, or erasing is held until I say go.",
+     "source": "policy.toml rule 'destructive' (stage)", "asserts": "refuse"},
+    {"category": "no-secret-fields",
+     "text": "Andy doesn't read or act on secret fields — passwords, keys, tokens, or one-time codes.",
+     "source": "policy.toml rule 'secret-fields' (block)", "asserts": "refuse"},
+    {"category": "stay-on-task",
+     "text": "Andy stays on my active task and won't be talked into ignoring its own gate.",
+     "source": "policy.toml rule 'off-task' (block)", "asserts": "refuse"},
+    {"category": "no-system-commands",
+     "text": "Andy doesn't run shell or system commands outside its own tools.",
+     "source": "policy.toml rule 'system-command' (block)", "asserts": "refuse"},
+    {"category": "no-comment-on-people",
+     "text": "Andy doesn't comment on, rate, or judge people.",
+     "source": "policy.toml rule 'about-people' (block)", "asserts": "refuse"},
+]
 
 # The ONLY mapping from a seeded category to the checker rule-ids it may cite for —
 # explicit, in code, never inferred. A line is cited only on a block/stage whose
