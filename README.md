@@ -70,13 +70,15 @@ real photos; SAM segmented the cable, book, and charger (49%, 35%, and 34% of th
 frame) and the box shipped (`witness_acceptance.py`); and three recorded clips were
 transcribed live and routed through the gate (`voice_live_run.py`).
 
-**Witness stress run, Oct 30.** Four new cable photos from the Razr went through the
-same live SAM check: a thin black cable looped around a cat on a cluttered floor (two
-shots), a white cable on a white board, and a braided cable. All four verified. In the
-two hardest shots, SAM's boxes landed on the cables themselves, not the cat or the
-board. As a control, a photo with no real-sized cable in it came back unverified. The
-photos stay on the demo Mac (`runs/witness/stress/`, not in this repo), and chat
-Witness still uses its three fixed photos.
+**Witness stress run, Oct 30 — reported, receipts not kept.** Four new cable photos
+from the Razr went through the same live SAM check: a thin black cable looped around a
+cat on a cluttered floor (two shots), a white cable on a white board, and a braided
+cable. All four verified. In the two hardest shots, SAM's boxes landed on the cables
+themselves, not the cat or the board. As a control, a photo with no real-sized cable in
+it came back unverified. The receipt chain from that run was not kept, so this paragraph
+is reported from the run's output and can't be checked against a chain. The photos stay
+on the demo Mac (`runs/witness/stress/`, not in this repo), and chat Witness still uses
+its three fixed photos.
 
 ### Verify a real live run, no key
 
@@ -740,8 +742,9 @@ so it runs offline.
   step the planner proposes is checked again.
 - **Witness uses fixed photos in chat.** SAM confirms the photos show the items, not
   that they were taken just now, and the mask label is Andy's, not SAM's (see *What
-  Witness shows* above). The Oct 30 stress run tried four more cable photos, all of
-  which verified, so SAM's failure point hasn't been found yet.
+  Witness shows* above). An Oct 30 stress run tried four more cable photos, all of
+  which verified (its receipts were not kept), so SAM's failure point hasn't been found
+  yet.
 - **Locking is Mac/Unix only, and the notes file isn't locked.** Chain appends, tip
   signatures, chain rotation, and earned-answer approvals are locked across processes
   with `flock` (four processes racing on one chain lose and duplicate nothing). There
