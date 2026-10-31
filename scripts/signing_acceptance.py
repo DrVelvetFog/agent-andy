@@ -36,6 +36,8 @@ never Andy's real key. A second throwaway key plays the forger.
         with no key set
      2. one flipped character FAILs it, naming the receipt
      3. no private key material is anywhere in the repo
+     4. docs/replay (the browser replay on GitHub Pages) holds byte-identical copies
+        of the example chain, its .sig, and the public key
 
 Local only: ssh-keygen, no network, no model.
 """
@@ -338,6 +340,16 @@ def public_example(d: Path) -> None:
         pub = []
     checks["C3. no private key material is in the repo; the shipped key is a public ed25519 key"] = (
         bool(files) and not leaked and len(pub) >= 2 and pub[0] == "ssh-ed25519")
+
+    # The browser replay (docs/, served by GitHub Pages) verifies its OWN copies of the
+    # chain, its signature, and the public key. They must be the shipped files, byte
+    # for byte, or the page would be proving something other than the repo does.
+    replay = ROOT / "docs" / "replay"
+    pairs = [(EXAMPLE, replay / EXAMPLE.name),
+             (signing.sig_path(EXAMPLE), replay / (EXAMPLE.name + ".sig")),
+             (ROOT / "data" / "andy-chain-signing.pub", replay / "andy-chain-signing.pub")]
+    checks["C4. docs/replay holds byte-identical copies of the example chain, its .sig, and the public key"] = all(
+        src.is_file() and dst.is_file() and src.read_bytes() == dst.read_bytes() for src, dst in pairs)
 
 
 def main() -> int:

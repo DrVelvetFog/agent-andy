@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Andy — recorded session, verify it yourself</title>
+<meta name="description" content="A replay of one real Agent Andy session: 33 hash-chained receipts. Your browser recomputes every hash, checks the signature, and shows a flipped byte failing.">
+<style>
+  :root {
+    --bg: #0c0f17; --panel: #111522; --panel-2: #161b2c; --paper: #141928; --paper-2: #192033;
+    --ink: #e6ecf5; --muted: #8f9bb0; --muted-2: #a3aec2;
+    --line: rgba(255,255,255,.08); --line-2: rgba(255,255,255,.14);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --allow: #34d399; --stage: #fbbf24; --block: #f87171; --plan: #38bdf8; --daemon: #c084fc; --neutral: #8295ac;
+    --allow-bg: rgba(52,211,153,.10); --stage-bg: rgba(251,191,36,.10); --block-bg: rgba(248,113,113,.10);
+    --plan-bg: rgba(56,189,248,.10); --daemon-bg: rgba(192,132,252,.10); --neutral-bg: rgba(130,149,172,.10);
+    --ease: cubic-bezier(.16, 1, .3, 1); --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 18px 20px 48px; }
+  a { color: var(--plan); }
+  code { font-family: var(--mono); font-size: .92em; color: var(--muted-2); }
+
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 0 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .glyph { flex: none; }
+  .htext { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; min-width: 0; }
+  header h1 { font-size: 18px; line-height: 1.2; margin: 0; letter-spacing: -.2px; font-weight: 650; }
+  header .impact { color: var(--muted); font-size: 14px; line-height: 1.4; }
+  header .impact b { color: var(--ink); font-weight: 600; }
+  header .htag { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--plan); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; }
+
+  .intro { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px 22px; margin-bottom: 18px; }
+  @media (max-width: 980px) { .intro { grid-template-columns: minmax(0, 1fr); } }
+  .intro p { margin: 0 0 8px; font-size: 14px; line-height: 1.55; color: var(--muted-2); }
+  .intro p b { color: var(--ink); font-weight: 600; }
+  .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+  .steps li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.5; color: var(--muted-2); }
+  .steps .n { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); color: var(--plan);
+    font-family: var(--mono); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .steps b { color: var(--ink); font-weight: 600; }
+  .runit { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 12px; overflow-x: auto; white-space: pre; margin-top: 4px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 22px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; min-width: 0; }
+  .pane.evidence { position: sticky; top: 14px; }
+  @media (max-width: 980px) { .pane.evidence { position: static; } }
+  .pane h2 { font-family: var(--mono); font-size: 11.5px; margin: 0 0 14px; color: var(--ink); font-weight: 600; letter-spacing: 1px;
+    text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .pane h2::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--plan); }
+
+  button { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 12px; cursor: pointer; transition: border-color .18s var(--ease), background .18s var(--ease), transform .12s var(--ease), opacity .18s var(--ease); }
+  button:hover:not(:disabled) { border-color: var(--line-2); background: #1c2237; }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:focus-visible { outline: 2px solid rgba(56,189,248,.6); outline-offset: 2px; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.danger { background: var(--block-bg); border-color: rgba(248,113,113,.35); color: #fecaca; }
+  button.danger:hover:not(:disabled) { background: rgba(248,113,113,.16); border-color: rgba(248,113,113,.55); }
+
+  .convo { min-height: 160px; max-height: 64vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 6px; }
+  .sysrow { align-self: center; display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .3px;
+    color: var(--muted); padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; }
+  .sysrow .dotmark { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); }
+  .bubble { max-width: 88%; padding: 11px 14px; border-radius: 14px; font-size: 14.5px; line-height: 1.5; }
+  .bubble .who { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .bubble .who .meta { text-transform: none; letter-spacing: 0; }
+  .bubble .btext { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.you { align-self: flex-end; background: var(--paper-2); border: 1px solid var(--line); border-top-right-radius: 5px; }
+  .bubble.andy { align-self: flex-start; background: var(--paper); border: 1px solid var(--line); border-left: 3px solid var(--neutral); border-top-left-radius: 5px; }
+  .bubble.andy.v-allow { border-left-color: var(--allow); }
+  .bubble.andy.v-stage { border-left-color: var(--stage); }
+  .bubble.andy.v-block { border-left-color: var(--block); }
+  .bubble.andy.v-plan { border-left-color: var(--plan); }
+  .bubble.andy.v-daemon { border-left-color: var(--daemon); }
+
+  .pill, .vpill, .lg { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; padding: 2px 7px;
+    border-radius: 5px; border: 1px solid transparent; white-space: nowrap; }
+  .pill.allow, .vpill.allow, .lg.allow { color: var(--allow); background: var(--allow-bg); border-color: rgba(52,211,153,.35); }
+  .pill.stage, .vpill.stage, .lg.stage { color: var(--stage); background: var(--stage-bg); border-color: rgba(251,191,36,.35); }
+  .pill.block, .vpill.block, .lg.block { color: var(--block); background: var(--block-bg); border-color: rgba(248,113,113,.35); }
+  .pill.plan, .vpill.plan, .lg.plan { color: var(--plan); background: var(--plan-bg); border-color: rgba(56,189,248,.35); }
+  .pill.daemon, .vpill.daemon, .lg.daemon { color: var(--daemon); background: var(--daemon-bg); border-color: rgba(192,132,252,.35); }
+  .pill.neutral, .vpill.neutral { color: var(--neutral); background: var(--neutral-bg); border-color: rgba(130,149,172,.3); }
+
+  .daemon-slot { margin: 12px 0 0; padding: 11px 14px; border-radius: 11px; background: var(--daemon-bg); border: 1px solid rgba(192,132,252,.25); }
+  .daemon-slot .dlabel { font-family: var(--mono); font-size: 10px; color: var(--daemon); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 5px; }
+  .daemon-slot .dtext { font-size: 13px; line-height: 1.5; margin-bottom: 9px; }
+  .daemon-slot .dnote { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .daemon-slot button { font-size: 12px; padding: 5px 11px; }
+  .replaynote { margin-top: 14px; font-family: var(--mono); font-size: 10.5px; color: #6f7b90; line-height: 1.55; }
+  .replaynote b { color: var(--muted); font-weight: 600; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .chainname { font-family: var(--mono); font-size: 11.5px; color: var(--muted); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--line); color: var(--muted); max-width: 100%; overflow-wrap: anywhere;
+    transition: color .25s var(--ease), border-color .25s var(--ease), background .25s var(--ease); }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neutral); flex: none; }
+  .badge.ok { color: var(--allow); border-color: rgba(52,211,153,.4); background: var(--allow-bg); }
+  .badge.ok .dot { background: var(--allow); }
+  .badge.fail { color: var(--block); border-color: rgba(248,113,113,.4); background: var(--block-bg); }
+  .badge.fail .dot { background: var(--block); }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+
+  .chain { max-height: 64vh; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 6px; }
+  .receipt { background: var(--paper); border: 1px solid var(--line); border-left: 3px solid var(--neutral); border-radius: 10px; min-width: 0;
+    opacity: 0; transform: translateY(4px); transition: opacity .3s var(--ease), transform .3s var(--ease), border-color .2s, background .2s; }
+  .receipt.show { opacity: 1; transform: none; }
+  .receipt.allow { border-left-color: var(--allow); }
+  .receipt.stage { border-left-color: var(--stage); }
+  .receipt.block { border-left-color: var(--block); }
+  .receipt.plan { border-left-color: var(--plan); }
+  .receipt.daemon { border-left-color: var(--daemon); }
+  .receipt.tampered { background: var(--block-bg); border-color: var(--block); }
+  .receipt.tampered .summary { text-decoration: line-through; text-decoration-color: var(--block); }
+  .r-row { width: 100%; display: flex; align-items: center; gap: 9px; min-width: 0; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; }
+  .r-row:hover:not(:disabled) { background: rgba(255,255,255,.025); }
+  .seq { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--plan); flex: none; }
+  .r-row .pill { flex: none; }
+  .r-row .summary { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .receipt.open .r-row .summary { white-space: normal; overflow-wrap: anywhere; }
+  .chev { margin-left: 2px; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+    transition: transform .28s var(--ease); flex: none; }
+  .receipt.open .chev { transform: rotate(-135deg); }
+  .collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s var(--ease); }
+  .collapse > .inner { overflow: hidden; min-height: 0; }
+  .receipt.open > .collapse { grid-template-rows: 1fr; }
+  .r-detail { padding: 0 12px 11px 12px; border-top: 1px solid var(--line); }
+  .r-type { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 9px; overflow-wrap: anywhere; }
+  .reason { color: var(--muted-2); font-size: 12px; margin-top: 6px; line-height: 1.5; overflow-wrap: anywhere; }
+  .hashes { font-family: var(--mono); font-size: 10.5px; color: #8a98b0; margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+  .hashes span { overflow-wrap: anywhere; word-break: break-all; }
+  .hashes b { color: var(--muted-2); font-weight: 600; }
+
+  footer { margin-top: 22px; color: #6b7790; font-size: 11.5px; border-top: 1px solid var(--line); padding-top: 13px; line-height: 1.6; }
+  footer b { color: var(--muted-2); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } .receipt { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="glyph" width="34" height="34" viewBox="0 0 44 44" aria-hidden="true">
+      <path d="M11 5 h24 a2 2 0 0 1 2 2 v27 l-3.5 2.6 -3.5 -2.6 -3.5 2.6 -3.5 -2.6 -3.5 2.6 -3.5 -2.6 -3.5 2.6 -3.5 -2.6 V7 a2 2 0 0 1 2 -2 z"
+            fill="#161d2b" stroke="#2c3b57" stroke-width="1.6" stroke-linejoin="round"/>
+      <line x1="14.5" y1="12" x2="29.5" y2="12" stroke="#2c3b57" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="14.5" y1="16" x2="25" y2="16" stroke="#2c3b57" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15 24.5 l4.6 4.6 L30 18.5" fill="none" stroke="#3ddc87" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="htext">
+      <h1>Agent&nbsp;Andy</h1>
+      <div class="impact">an agent that checks a local rule before you act, and <b>proves its answer</b></div>
+    </div>
+    <div class="htag">recorded session · Oct 30, 2026</div>
+  </header>
+
+  <div class="intro">
+    <div>
+      <p><b>This is a replay, not a mock-up.</b> On the left is one real session with Andy, read straight
+        from its receipt chain: 33 receipts, typed and spoken turns, three SAM observations, a Spark plan
+        checked before it ran, a staged answer, the daemon&rsquo;s one suggestion, and a blocked wire attempt.
+        On the right is the chain itself. Nothing here is filled in by hand.</p>
+      <p>The chain file, its signature, and Andy&rsquo;s public key load once from this site; after that the
+        page makes <b>no network requests</b>. Verification runs in your browser with WebCrypto.
+        Want to talk to Andy yourself? It needs Python and nothing else, no API key:</p>
+      <div class="runit">git clone https://github.com/DrVelvetFog/agent-andy.git &amp;&amp; cd agent-andy
+./start-andy.sh</div>
+    </div>
+    <ol class="steps">
+      <li><span class="n">1</span><span><b>Press Verify.</b> Your browser recomputes every receipt&rsquo;s SHA-256 from the first one, checks each link to the receipt before it, and checks the Ed25519 signature on the chain&rsquo;s tip against Andy&rsquo;s public key.</span></li>
+      <li><span class="n">2</span><span><b>Press Flip one byte.</b> One letter in receipt #1 changes, on a copy. Verification fails at that receipt and every hash after it is orphaned. Press Verify again: the real chain still passes.</span></li>
+      <li><span class="n">3</span><span><b>Read the amber and red turns.</b> Tybee Island is <b>staged</b>, not guessed; the wire transfer is <b>blocked</b> and never ran. Open any receipt for its hash, its link, and the rule that decided it.</span></li>
+    </ol>
+  </div>
+
+  <div class="layout">
+    <section class="pane">
+      <h2>The session, from its receipts</h2>
+      <div id="convo" class="convo"></div>
+      <div id="daemonSlot" class="daemon-slot" hidden>
+        <div class="dlabel">⬦ Daemon · above the checker bar</div>
+        <div class="dtext" id="daemonText"></div>
+        <button id="daemonDismiss" type="button">Dismiss</button>
+        <div class="dnote">In the live app a dismissal is itself a receipt and silences the daemon for the session. Here it only hides this card.</div>
+      </div>
+      <div class="replaynote">Replies marked <b>spoke</b> were voiced by ElevenLabs during the session; the audio stays on the demo Mac and the chain holds its hash. The three Witness photos are not in the repo either — their hashes are. <b>Everything typed or heard is kept word for word</b> in the receipts.</div>
+    </section>
+
+    <section class="pane evidence">
+      <h2>Receipt chain &mdash; recompute it</h2>
+      <div class="controls">
+        <span class="chainname" id="chainName">loading…</span>
+        <button id="replay" type="button">▶ Replay</button>
+        <button id="verify" type="button">✓ Verify</button>
+        <button id="tamper" class="danger" type="button">⚡ Flip one byte</button>
+        <div id="badge" class="badge"><span class="dot"></span><span id="badge-text">not yet verified</span></div>
+      </div>
+      <div class="legend">
+        <span class="lg allow">allow</span><span class="lg stage">stage</span><span class="lg block">block</span>
+        <span class="lg plan">plan / voice</span><span class="lg daemon">daemon</span>
+      </div>
+      <div id="chainView" class="chain"></div>
+    </section>
+  </div>
+
+  <footer>
+    <b>What this page does:</b> loads <code>replay/live-demo-chain.jsonl</code>, its <code>.sig</code>, and
+    <code>replay/andy-chain-signing.pub</code>, then recomputes every hash (SHA-256 over each receipt&rsquo;s bytes with
+    its own hash field removed) and the tip signature (OpenSSH Ed25519, namespace <code>andy-chain-tip</code>) locally
+    &mdash; the same checks as <code>receipts/verify.py</code> and <code>receipts/signing.py</code> in the repo. A browser
+    without Ed25519 in WebCrypto reports the signature as not checked, never as verified. <b>Flip one byte</b> edits a copy
+    in memory. <b>What the recorded session did:</b> chat text and Witness photos went to Meta (Muse Spark, SAM 3.1), mic
+    audio to Meta (Muse Voice Transcribe), and replies to ElevenLabs &mdash; see the
+    <a href="https://github.com/DrVelvetFog/agent-andy#readme">README</a>. A signature proves who signed the tip, not that
+    the content is true.
+  </footer>
+</div>
+
+<script src="verify.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const view = $('#chainView'), badge = $('#badge'), badgeText = $('#badge-text');
+const convo = $('#convo'), daemonSlot = $('#daemonSlot'), daemonText = $('#daemonText');
+const V = window.AndyVerify;
+let origLines = [], shownLines = [], current = [], sigText = '', pubLine = '', replayTimer = null;
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+/* ---------- timeline: the same reading of a receipt as the live viewer ---------- */
+function classify(a) {
+  const t = a.type;
+  if (t === 'daemon_suggestion') {
+    const gv = (a.verdict && a.verdict.verdict) || '?';
+    return { tier: 'daemon', label: 'DAEMON', reason: 'gated: ' + gv + ' · NOT executed · dismissible' };
+  }
+  const v = a.verdict && a.verdict.verdict;
+  if (v) {
+    let reason = (a.verdict.reason || '') + (a.verdict.rule ? '  ·  rule: ' + a.verdict.rule : '');
+    if (a.cited_policy) reason += '  ·  standing policy: “' + a.cited_policy + '”';
+    else if (a.policy_conflict) reason += '  ·  ' + a.policy_conflict;
+    return { tier: v, label: v.toUpperCase(), reason: reason };
+  }
+  if (t === 'detect_answer') {
+    const d = (a.decision || '').toUpperCase();
+    if (d.indexOf('STAGED') >= 0) {
+      let reason = a.staging_reason || '';
+      const cands = a.tier2_candidates || [];
+      if (cands.length) reason += ' · site-index candidate (unverified): ' + cands[0].url + (cands.length > 1 ? ' (+' + (cands.length - 1) + ' more)' : '');
+      return { tier: 'stage', label: 'STAGED', reason: reason };
+    }
+    if (d.indexOf('CAVEAT') >= 0) return { tier: 'stage', label: 'CAVEAT', reason: a.caveat || '' };
+    if (d.indexOf('ANSWER') >= 0) return { tier: 'allow', label: 'ANSWERED', reason: (a.rule_verdict || '') };
+  }
+  if (t === 'witness_observation') return a.verified ? { tier: 'allow', label: 'VERIFIED', reason: a.reason || '' } : { tier: 'stage', label: 'UNVERIFIED', reason: a.reason || '' };
+  if (t === 'checklist_result') return a.ready_to_ship ? { tier: 'allow', label: 'READY TO SHIP', reason: 'every item verified' }
+    : { tier: 'stage', label: 'NOT SHIPPED', reason: 'unverified: ' + ((a.unverified_items || []).join(', ') || '—') };
+  if (t === 'daemon_dismissed') return { tier: 'neutral', label: 'DISMISSED', reason: 'silent for the session' };
+  if (t === 'verify_fetch') return { tier: 'plan', label: 'FETCHED', reason: a.fetched_ok ? a.url : ('fetch failed: ' + (a.reason || '')) };
+  if (t === 'verify_extract') return a.extract_ok ? { tier: 'stage', label: 'EXTRACTED', reason: 'verbatim-checked · staged for your approval · not executed' }
+    : { tier: 'stage', label: 'EXTRACT FAILED', reason: 'fail-closed: ' + (a.reason || '') };
+  if (t === 'verify_promote') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — confirmed secondary (names a primary)' };
+  if (t === 'verify_decline') return { tier: 'neutral', label: 'DECLINED', reason: 'owner declined — still staged, not answered' };
+  if (t === 'task_plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || ((a.steps || []).length + ' steps') };
+  if (t === 'task_step') return { tier: 'stage', label: 'STEP · WAITING', reason: 'note held for the owner\'s approval' };
+  if (t === 'task_approved') return { tier: 'allow', label: 'APPROVED', reason: 'owner approved — note written to the sandbox' };
+  if (t === 'task_declined') return { tier: 'neutral', label: 'SKIPPED', reason: 'owner declined — note skipped, not written' };
+  if (t === 'voice_output') return { tier: 'plan', label: (a.kind === 'daemon' ? 'DAEMON ' : '') + (a.voiced ? 'SPOKE' : 'TEXT ONLY'),
+    reason: a.tts_engine ? 'voice: ' + a.tts_engine : (a.reason || 'text only') };
+  if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
+  if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || '') };
+  if (t === 'plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || '' };
+  if (t === 'session_start') return { tier: 'neutral', label: 'SESSION', reason: '' };
+  return { tier: 'neutral', label: (t || 'step').toUpperCase(), reason: a.reason || '' };
+}
+
+function card(r, idx) {
+  const a = r.action || {}, c = classify(a);
+  const el = document.createElement('div');
+  el.className = 'receipt ' + c.tier;
+  el.dataset.idx = idx;
+  el.innerHTML =
+    '<button class="r-row" type="button" aria-expanded="false"><span class="seq">#' + r.seq + '</span>' +
+      '<span class="pill ' + c.tier + '">' + c.label + '</span>' +
+      '<span class="summary">' + esc(a.summary || a.type || 'step') + '</span>' +
+      '<span class="chev" aria-hidden="true"></span></button>' +
+    '<div class="collapse"><div class="inner" inert><div class="r-detail">' +
+      '<div class="r-type">' + esc((a.type || '') + (a.tool ? ' · ' + a.tool : '')) + '</div>' +
+      (c.reason ? '<div class="reason">' + esc(c.reason) + '</div>' : '') +
+      '<div class="hashes"><span><b>hash</b> ' + esc(r.hash || '') + '</span><span><b>prev</b> ' + esc(r.prev || '') + '</span></div>' +
+    '</div></div></div>';
+  el.querySelector('.r-row').addEventListener('click', () => setOpen(el, !el.classList.contains('open')));
+  return el;
+}
+
+function setOpen(el, open) {
+  el.classList.toggle('open', open);
+  const btn = el.querySelector('.r-row'); if (btn) btn.setAttribute('aria-expanded', String(open));
+  const inner = el.querySelector('.collapse > .inner'); if (inner) inner.inert = !open;
+}
+
+function renderTimeline(reveal) {
+  clearTimeout(replayTimer);
+  view.innerHTML = '';
+  if (!current.length) { view.innerHTML = '<div class="reason">empty chain</div>'; return; }
+  const cards = current.map(card);
+  cards.forEach(c => view.appendChild(c));
+  if (reveal) { let i = 0; const step = () => { if (i >= cards.length) return; cards[i].classList.add('show'); i++; replayTimer = setTimeout(step, 450); }; step(); }
+  else cards.forEach(c => c.classList.add('show'));
+}
+
+function setBadge(state, text) { badge.className = 'badge' + (state ? ' ' + state : ''); badgeText.textContent = text; }
+
+/* ---------- the conversation, read from the same receipts ---------- */
+const SEV = { block: 4, stage: 3, allow: 2, plan: 1, daemon: 1, neutral: 0 };
+function addSystemRow(text) { const b = document.createElement('div'); b.className = 'sysrow'; b.innerHTML = '<span class="dotmark"></span>' + esc(text); convo.appendChild(b); }
+function addBubble(who, meta, text, verdict) {
+  const b = document.createElement('div');
+  let cls = 'bubble ' + (who === 'you' ? 'you' : 'andy');
+  if (who === 'andy' && verdict && verdict.tier) cls += ' v-' + verdict.tier;
+  b.className = cls;
+  let head = '<div class="who">' + esc(who === 'you' ? 'owner' : 'Andy');
+  if (who === 'andy' && verdict && verdict.label) head += ' <span class="vpill ' + verdict.tier + '">' + esc(verdict.label) + '</span>';
+  if (meta) head += ' <span class="meta">· ' + esc(meta) + '</span>';
+  b.innerHTML = head + '</div><div class="btext">' + esc(text || '') + '</div>';
+  convo.appendChild(b);
+}
+function renderChat(receipts) {
+  convo.innerHTML = '';
+  if (receipts.some(rc => (rc.action || {}).type === 'session_start')) addSystemRow('session started — typed and voice both go through the checker');
+  let best = null;
+  for (const rc of receipts) {
+    const a = rc.action || {};
+    if (a.type === 'chat_input') { best = null; addBubble('you', 'typed', a.text); }
+    else if (a.type === 'voice_input') { best = null; addBubble('you', 'voice · ' + (a.source || ''), a.transcript); }
+    else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', a.voiced ? 'spoke' : 'text', a.text, best); }
+    else if (a.type !== 'session_start') { const c = classify(a), s = SEV[c.tier] ?? 0; if (!best || s > best.sev) best = { tier: c.tier, label: c.label, sev: s }; }
+  }
+  let sug = null, dismissedAt = -1;
+  receipts.forEach((rc, i) => { const a = rc.action || {}; if (a.type === 'daemon_suggestion') sug = { text: a.spoken, i }; if (a.type === 'daemon_dismissed') dismissedAt = i; });
+  if (sug && sug.i > dismissedAt) { daemonText.textContent = sug.text; daemonSlot.hidden = false; } else daemonSlot.hidden = true;
+}
+
+/* ---------- load, verify, flip ---------- */
+function parse(lines) { return lines.filter(l => l.trim()).map(l => JSON.parse(l)); }
+
+async function load() {
+  const [chain, sig, pub] = await Promise.all([
+    fetch('replay/live-demo-chain.jsonl').then(r => r.text()),
+    fetch('replay/live-demo-chain.jsonl.sig').then(r => r.ok ? r.text() : ''),
+    fetch('replay/andy-chain-signing.pub').then(r => r.text()),
+  ]);
+  origLines = chain.split('\n'); shownLines = origLines; sigText = sig; pubLine = pub.split('\n')[0];
+  current = parse(origLines);
+  $('#chainName').textContent = 'live-demo-chain.jsonl (' + current.length + ')';
+  renderChat(current);
+  renderTimeline(false);
+}
+
+async function verify(lines, note) {
+  setBadge('', 'verifying…');
+  const r = await V.verifyChain(lines);
+  if (!r.ok) { setBadge('fail', '✗ FAIL — ' + r.reason + (note || '')); return r; }
+  const s = await V.verifyTip(r.count, r.tip, sigText, pubLine);
+  const tail = s.state === 'VERIFIED' ? ' · signature VERIFIED (Andy\'s chain key)' : s.state === 'FAIL' ? ' · signature FAIL — ' + s.reason : ' · ' + s.reason;
+  setBadge(s.state === 'FAIL' ? 'fail' : 'ok', '✓ ' + r.reason + tail);
+  return r;
+}
+
+$('#verify').addEventListener('click', async () => {
+  shownLines = origLines; current = parse(origLines);
+  view.querySelectorAll('.receipt.tampered').forEach(e => e.classList.remove('tampered'));
+  await verify(origLines);
+});
+
+$('#tamper').addEventListener('click', async () => {
+  const flipped = V.flipOneByte(origLines, origLines.length > 1 ? 1 : 0);
+  if (!flipped) { setBadge('fail', 'could not find a byte to flip'); return; }
+  const r = await verify(flipped, ' (on a copy; the real chain is untouched)');
+  view.querySelectorAll('.receipt.tampered').forEach(e => e.classList.remove('tampered'));
+  const el = view.querySelector('.receipt[data-idx="' + r.failed + '"]');
+  if (el) { el.classList.add('tampered'); setOpen(el, true); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+});
+
+$('#replay').addEventListener('click', () => { setBadge('', 'replaying…'); renderTimeline(true); });
+$('#daemonDismiss').addEventListener('click', () => { daemonSlot.hidden = true; });
+
+load().catch(e => { setBadge('fail', 'could not load the chain: ' + e.message); $('#chainName').textContent = 'live-demo-chain.jsonl'; });
+</script>
+</body>
+</html>
