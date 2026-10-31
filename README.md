@@ -4,6 +4,10 @@
 
 A personal agent that cannot act without leaving a receipt.
 
+**No clone needed:** [replay a recorded session in your browser](https://drvelvetfog.github.io/agent-andy/)
+— every hash is recomputed and the tip signature checked on your machine, and you
+can flip a byte and watch it fail. Nothing to install, nothing sent anywhere.
+
 **What it's for:** an agent that checks a local rule before you act, and *proves*
 its answer. It ships with one example — whether you can legally metal-detect at a
 given spot, where a wrong "allowed" can mean a fine. Rule-checking is the product;
@@ -20,10 +24,11 @@ recompute it."
 
 ![The Andy viewer: a staged answer, a blocked attack, and a verified receipt chain](docs/img/viewer-staged-blocked-verified.png)
 
-## Try it in 2 minutes, no API key
+## Quickstart — 2 minutes, no API key
 
 You need Python 3.11 or newer and nothing else: no install, no dependencies, no key.
-Tested on macOS.
+Tested on macOS. Keys are optional and only switch on the model paths;
+[`.env.example`](.env.example) lists the three variables and where each is read.
 
 ```bash
 git clone https://github.com/DrVelvetFog/agent-andy.git && cd agent-andy
@@ -60,6 +65,10 @@ Measured by the acceptance suites in this repo, with no API key:
 | Concurrent processes | 4 processes × 25 appends: 100 receipts, none lost or duplicated, signed tip VERIFIED | `scripts/multiprocess_acceptance.py` |
 | Chain and earned-answer signing | a rewrite with recomputed hashes, a truncated tail, a tampered or foreign signature: FAIL; no signature: UNSIGNED; a forged earned answer: staged | `scripts/signing_acceptance.py` |
 | All suites | 18 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
+
+Every number above comes from a suite you can run; [`eval/`](eval/README.md)
+collects them with their commands, plus the over-blocking probe and the tamper
+cases, and says what is *not* measured.
 
 The four skips are the runs that need a key, recorded voice clips, the Witness
 photos, or a built Mac app. **Run with the keys, clips, and photos on Oct 30, the
@@ -132,6 +141,24 @@ recorded as the mask count and how much of the frame the largest mask covers.
 Built solo by Tony Jagodka, with AI assistance as described below, for the
 **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4, 2026) · **Indie
 Developer** track · theme: **Build for Your World**.
+
+## Meta models — which does what
+
+Three Meta models run in the live loop, each in one named place, and none of
+them decides whether an action runs:
+
+| Model | ID | Where it is called | What goes in, what comes back |
+|---|---|---|---|
+| **Muse Spark** — the brain | `muse-spark-1.3`, Meta Model API | `agent/brain.py`, for an allowed general request | the request text; a plan whose every step the policy engine checks before it runs |
+| **SAM 3.1** — the eyes | `sam-3.1`, Meta Model API | `agent/eyes.py`, called by `agent/witness.py` | one photo and one noun phrase ("cable"); masks and boxes, recorded as a mask count and the coverage of the largest mask |
+| **Muse Voice Transcribe** — voice in | `muse-voice-transcribe-1.0`, Meta Model API | `agent/voice.py`, and the viewer's `/api/voice` for the Mic button | a mono 16-bit WAV; a transcript, which then goes through the same gate as typed text |
+
+Not Meta, and labelled as such wherever it shows: the **checker** is a
+deterministic policy engine (`agent/policy.toml`), not a model — no open-weights
+checker was built and no open-weights bonus is claimed; **voice out** is ElevenLabs
+(`agent/tts.py`), rendering text Andy already decided and receipted. With no
+`MODEL_API_KEY` set, none of the three Meta models is called: the demo runs on the
+checker, the lookup, and the verifier alone, which is what the quickstart shows.
 
 ## Architecture
 
