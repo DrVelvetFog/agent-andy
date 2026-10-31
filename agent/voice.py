@@ -435,8 +435,12 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
                               "again later with a fresh fetch.")
         payload = {"intent": "decline", "result": res}
     elif intent == "task":
-        res = task.run_trip(chain, message, store, strict=strict)
+        # The gate's own verdict rides along: a staged raw request holds the note.
+        res = task.run_trip(chain, message, store, strict=strict, raw_verdict=verdict)
         reply_text = res["reply"]
+        if res.get("held") and cite["cited"]:   # cite the standing line, as a refusal does
+            reply_text += (f" Your standing policy: “{cite['cited']}” ({cite['source']}). "
+                           f"Receipt {gate['hash'][:12]}…")
         payload = {"intent": "task", "result": res}
     elif intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)

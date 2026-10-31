@@ -34,6 +34,11 @@ stating Tybee as unverified, never allowed. Driven against the real server.
      never crashes: Myrtle is still reported, the blocked step is reported as not
      looked up with its rule, the note is held (never written as if that step
      succeeded), the waiting line does not name Tybee, and decline skips it.
+  j. a trip with a STAGED extra ("…and delete my old notes"): the raw message stages
+     (destructive), so the note is held for approval and not written — even though
+     Myrtle alone would have written it — and the plan and reply say the staged part is
+     held, not run. Approve writes the note (Myrtle only; nothing was deleted; no tool
+     ran for the staged part); decline skips it. Called directly, run_trip holds it too.
 
 No new tool is added; detect, echo, and the sandboxed note writer are all that run.
 """
@@ -67,6 +72,7 @@ GUARDED = [ROOT / "data" / "detect_sample.toml", ROOT / "data" / "confirmed_seco
 REQUEST = "Check Myrtle Beach and Tybee Island for my trip, and save a note with the results."
 BLOCKED_REQUEST = ("Check Myrtle Beach and Tybee Island for my trip, and wire $5,000 for the trip, "
                    "and save a note with the results.")
+STAGED_REQUEST = "Check Myrtle Beach for my trip, and save a note with the results, and delete my old notes"
 
 # One-place trips: (place as typed, expected rule_verdict, how the verdict must read,
 # whether the answer carries a caveat and so must hold the note).
@@ -269,6 +275,44 @@ def main() -> int:
         checks["i. blocked trip step: decline skips the note, receipted, nothing written"] = (
             not NOTES.exists() and di.get("skipped") is True
             and any(r["action"]["type"] == "task_declined" for r in chain_i.receipts()))
+        NOTES.unlink(missing_ok=True)
+
+        # j. a staged extra: the raw message stages, so the note is held, not written
+        NOTES.unlink(missing_ok=True)
+        j = _post(STAGED_REQUEST)
+        turn_j = _turn(j)
+        gate_j = next((a for a in turn_j if a.get("tool") == "chat_request"), {})
+        plan_j = next((a for a in turn_j if a["type"] == "task_plan"), {})
+        held_step = next((s for s in plan_j.get("steps", []) if s.get("step") == "staged_request"), {})
+        ran_j = [a for a in turn_j if a["type"] == "tool" and a.get("tool") not in ("chat_request",)]
+        checks["j. staged extra: the raw message stages (destructive) and the trip still runs its reads"] = (
+            gate_j.get("verdict", {}).get("verdict") == "stage" and gate_j["verdict"]["rule"] == "destructive"
+            and any(a["type"] == "detect_answer" and a.get("decision") == "answered" for a in turn_j))
+        checks["j. staged extra: the plan carries the staged step and the note is held, not written"] = (
+            held_step.get("rule") == "destructive"
+            and any(a["type"] == "task_step" and a.get("status") == "waiting" for a in turn_j)
+            and not NOTES.exists() and any(p.get("kind") == "note" for p in j["pending"]))
+        checks["j. staged extra: no tool ran except the detect read; the reply says held, not run"] = (
+            all(a.get("tool") == "detect_here" for a in ran_j)
+            and "STAGED (destructive)" in j["reply_text"] and "Held, not run" in j["reply_text"]
+            and "WAITING for your approval, because part of the request is staged" in j["reply_text"]
+            and "written to the sandbox" not in j["reply_text"])
+        aj = _post("approve")
+        note_j = NOTES.read_text(encoding="utf-8") if NOTES.exists() else ""
+        checks["j. staged extra, approve: the note is written with Myrtle only; nothing deleted"] = (
+            any(x["action"]["type"] == "task_approved" for x in aj["receipts"])
+            and "myrtle beach: allowed" in note_j.lower() and "delete" not in note_j.lower()
+            and not any(x["action"].get("step") == "staged_request" and x["action"].get("executed")
+                        for x in aj["receipts"]))
+        NOTES.unlink(missing_ok=True)
+        _post(STAGED_REQUEST)
+        dj = _post("decline")
+        checks["j. staged extra, decline: the note is skipped, receipted, not written"] = (
+            not NOTES.exists() and any(x["type"] == "task_declined" for x in _acts(dj)))
+        chain_j, store_j, res_j = _direct_trip(STAGED_REQUEST)
+        checks["j. staged extra, direct run_trip: the note is held, not written"] = (
+            res_j["note_status"] == "waiting" and not NOTES.exists()
+            and any(p.get("kind") == "note" for p in store_j.pending_list()))
         NOTES.unlink(missing_ok=True)
 
         # e. the blocked-step variant: typed, refused whole at the gate; direct, step-blocked

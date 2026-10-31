@@ -15,6 +15,9 @@ its ACTUAL rule verdict (restricted, limited, registration required), never as
 "allowed"; an answer that carries a caveat holds the note the same way a staged
 result does, and the note keeps the caveat. A blocked extra (e.g. "wire
 $5,000") is ruled on by the checker, receipted, and never poisons the safe steps.
+A STAGED extra ("…and delete my old notes") holds the note the same way a staged
+result does: the staged part never runs, and the note waits for the owner — approving
+writes the note only.
 """
 
 from __future__ import annotations
@@ -89,16 +92,30 @@ def _note_text(outcomes: list) -> str:
     return "  ".join(lines)
 
 
-def run_trip(chain, message: str, store, strict: bool = False) -> dict:
+def run_trip(chain, message: str, store, strict: bool = False, raw_verdict: dict | None = None) -> dict:
     """Receipt the plan, run each detect step through the gate, block any payment
-    step, and hold the note for the owner's approval when a result staged."""
+    step, and hold the note for the owner's approval when a result staged — or when
+    the checker staged the raw request itself ("…and delete my old notes")."""
     places, blocked = _parse(message)
     if not places:
         places = ["Myrtle Beach", "Tybee Island"]  # the rehearsed demo
 
+    # The checker's verdict on the RAW message. chat_turn passes the one it already
+    # receipted as `chat_request`; a direct caller gets the same deterministic ruling
+    # here. A block never reaches this function from chat (refused whole at the gate).
+    # A stage means the request carries a step a human must confirm: that step is
+    # never run here (there is no tool for it), and the note is held like a staged
+    # result — never written as if the whole request had been allowed.
+    if raw_verdict is None:
+        raw_verdict = checker.evaluate({"type": "tool", "tool": "chat_request", "summary": message})
+    held = raw_verdict if raw_verdict.get("verdict") == checker.STAGE else None
+
     steps = [{"n": i + 1, "step": "detect", "target": p} for i, p in enumerate(places)]
     for b in blocked:
         steps.append({"n": len(steps) + 1, "step": "blocked_request", "detail": b})
+    if held:
+        steps.append({"n": len(steps) + 1, "step": "staged_request", "detail": "a staged step in the request; held, not run",
+                      "verdict": held["verdict"], "rule": held["rule"], "reason": held["reason"]})
     steps.append({"n": len(steps) + 1, "step": "note", "detail": "write a trip note with the results"})
     chain.append({"type": "task_plan", "summary": f"trip task plan: {len(steps)} steps",
                   "utterance": message, "steps": steps})
@@ -119,10 +136,11 @@ def run_trip(chain, message: str, store, strict: bool = False) -> dict:
         chain.append({**action, "verdict": verdict, "executed": False, "step": "blocked_request"})
         blocked_results.append((b, verdict["verdict"], verdict["reason"], verdict["rule"]))
 
-    # Note step: held for approval when any result staged or carries a caveat;
-    # written right away only when every result is a plain Tier 1 answer.
+    # Note step: held for approval when any result staged or carries a caveat, or
+    # when the raw request staged; written right away only when every result is a
+    # plain Tier 1 answer and the checker allowed the request.
     note_text = _note_text(outcomes)
-    if any_staged or any_caveat:
+    if any_staged or any_caveat or held:
         store.stage_note(chain, "trip note", note_text)
         note_status = "waiting"
     else:
@@ -131,11 +149,11 @@ def run_trip(chain, message: str, store, strict: bool = False) -> dict:
             chain, "note", summary="save trip note", text=note_text)["executed"] else "not written"
 
     return {"intent": "task", "places": places, "outcomes": outcomes,
-            "blocked": blocked_results, "note_status": note_status, "note_text": note_text,
-            "reply": _reply(outcomes, blocked_results, note_status, any_staged)}
+            "blocked": blocked_results, "held": held, "note_status": note_status, "note_text": note_text,
+            "reply": _reply(outcomes, blocked_results, note_status, any_staged, held)}
 
 
-def _reply(outcomes, blocked_results, note_status, any_staged=True) -> str:
+def _reply(outcomes, blocked_results, note_status, any_staged=True, held=None) -> str:
     parts, n = ["Here's the plan:"], 0
     for place, o in outcomes:
         n += 1
@@ -148,6 +166,10 @@ def _reply(outcomes, blocked_results, note_status, any_staged=True) -> str:
     for b, _v, reason, rule in blocked_results:
         n += 1
         parts.append(f"{n}) {b} — BLOCKED ({rule}): {reason}. Not executed.")
+    if held:
+        n += 1
+        parts.append(f"{n}) Part of this request is STAGED ({held['rule']}): {held['reason']}. "
+                     "Held, not run.")
     n += 1
     # Name Tybee only when Tybee is actually one of this trip's staged places.
     tybee_staged = any(o["decision"] == detect.STAGED and "tybee" in (o.get("place") or "").lower()
@@ -157,6 +179,10 @@ def _reply(outcomes, blocked_results, note_status, any_staged=True) -> str:
     if note_status == "waiting" and any_staged:
         parts.append(f"{n}) Trip note — WAITING for your approval, because a result is staged. Say "
                      f"“approve” to write it ({will_state}), or “decline” to skip it.")
+    elif note_status == "waiting" and held:
+        parts.append(f"{n}) Trip note — WAITING for your approval, because part of the request is "
+                     "staged. Say “approve” to write it (the note holds only the results above; the "
+                     "staged part still does not run), or “decline” to skip it.")
     elif note_status == "waiting":
         parts.append(f"{n}) Trip note — WAITING for your approval, because a result carries a "
                      "caveat. Say “approve” to write it (the caveat stays in the note), or "

@@ -478,7 +478,10 @@ Beach allowed *with its citation* and Tybee Island *unverified and staged, not
 answered*. **Decline** and the note step is skipped and receipted as skipped, never
 written. A request with a blocked extra, such as "…and wire $5,000 for the trip", is
 refused as a whole by the checker on the raw message — nothing in it runs, not even
-the safe steps — and the refusal is receipted. `scripts/multistep_acceptance.py`.
+the safe steps — and the refusal is receipted. A request with a *staged* extra, such as
+"…and delete my old notes", runs its reads but holds the note for your approval, like a
+staged result: approving writes the note only, and the staged part still never runs.
+`scripts/multistep_acceptance.py`.
 
 ## Seeded memory — citable refusals (active since Oct 30)
 
