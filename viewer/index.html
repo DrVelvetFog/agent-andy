@@ -545,7 +545,18 @@ function updateDaemon(receipts) {
   else daemonSlot.hidden = true;
 }
 
-function playAudio(path) { try { new Audio('/audio?path=' + encodeURIComponent(path)).play().catch(() => {}); } catch (e) {} }
+// One reusable player, primed inside the click that starts a turn. Safari only lets
+// audio start close to a click; a long reply can take 10+ s to voice, so a fresh
+// Audio() made when it arrives is blocked. A player that already played in the
+// click stays allowed for the rest of the page.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+let player = null;
+function primeAudio() {
+  try { if (!player) player = new Audio(); player.src = SILENT_WAV; player.play().catch(() => {}); } catch (e) {}
+}
+function playAudio(path) {
+  try { const p = player || new Audio(); p.src = '/audio?path=' + encodeURIComponent(path); p.play().catch(() => {}); } catch (e) {}
+}
 
 // Verify proposals awaiting a decision — the Approve/Decline buttons live HERE,
 // beside the full evidence, and only when a proposal is actually pending.
@@ -589,6 +600,7 @@ async function send() {
   const input = $('#msg'), btn = $('#send');
   const msg = input.value.trim();
   if (!msg) return;
+  primeAudio();
   input.value = ''; input.disabled = true; btn.disabled = true; mic.disabled = true;
   addBubble('you', 'typed', msg);                 // optimistic echo; replaced by refreshChat
   try {
@@ -790,7 +802,7 @@ if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !(window
 /* ---------- wiring ---------- */
 $('#send').addEventListener('click', send);
 $('#breakToggle').addEventListener('click', () => { const b = $('#breakit'); setOpen(b, !b.classList.contains('open')); });
-mic.addEventListener('click', () => { if (micRec) micStop(); else micStart(); });
+mic.addEventListener('click', () => { primeAudio(); if (micRec) micStop(); else micStart(); });
 $('#attacks').addEventListener('click', e => { const b = e.target.closest('button'); if (b) sendAttack(b.dataset.a); });
 $('#attackSend').addEventListener('click', () => { const i = $('#attackMsg'); const t = i.value; i.value = ''; sendAttack(t); });
 $('#attackMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { const t = e.target.value; e.target.value = ''; sendAttack(t); } });
