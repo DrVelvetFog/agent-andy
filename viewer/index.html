@@ -660,10 +660,15 @@ let micRec = null;     // the recording in progress
 let micDead = null;    // why the mic can't be used at all (permission, no API)
 
 function micState(state, status) {
-  const label = { idle: 'Mic', recording: 'Stop', processing: 'Transcribing…', error: 'Mic unavailable' }[state];
-  mic.dataset.state = state;
-  mic.classList.toggle('recording', state === 'recording');
-  mic.innerHTML = '<span aria-hidden="true">🎤</span> ' + esc(label);
+  // Rebuild the button only when its state changes. The recording clock calls this
+  // every 200 ms; replacing the button's contents mid-press made Safari drop the
+  // Stop click, so the clock only updates the status line.
+  if (mic.dataset.state !== state) {
+    const label = { idle: 'Mic', recording: 'Stop', processing: 'Transcribing…', error: 'Mic unavailable' }[state];
+    mic.dataset.state = state;
+    mic.classList.toggle('recording', state === 'recording');
+    mic.innerHTML = '<span aria-hidden="true">🎤</span> ' + esc(label);
+  }
   micStatus.textContent = status || '';
 }
 
