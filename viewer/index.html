@@ -92,6 +92,7 @@
     display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
   .bubble .who .meta { text-transform: none; letter-spacing: 0; }
   .bubble .btext { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble .said { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .bubble.you { align-self: flex-end; background: var(--paper-2); border: 1px solid var(--line);
     border-top-right-radius: 5px; }
   .bubble.andy { align-self: flex-start; background: var(--paper); border: 1px solid var(--line);
@@ -498,7 +499,7 @@ function addSystemRow(text) {
   b.innerHTML = '<span class="dotmark"></span>' + esc(text); convo.appendChild(b);
 }
 
-function addBubble(who, meta, text, audioPath, verdict) {
+function addBubble(who, meta, text, audioPath, verdict, note) {
   const b = document.createElement('div');
   let cls = 'bubble ' + (who === 'you' ? 'you' : 'andy');
   if (who === 'andy' && verdict && verdict.tier) cls += ' v-' + verdict.tier;
@@ -508,7 +509,8 @@ function addBubble(who, meta, text, audioPath, verdict) {
   if (meta) head += ' <span class="meta">· ' + esc(meta) + '</span>';
   if (audioPath) head += ' <button class="play" data-audio="' + esc(audioPath) + '">🔊 replay</button>';
   head += '</div>';
-  b.innerHTML = head + '<div class="btext">' + esc(text || '') + '</div>';
+  b.innerHTML = head + (note ? '<div class="said">' + esc(note) + '</div>' : '') +
+    '<div class="btext">' + esc(text || '') + '</div>';
   convo.appendChild(b);
 }
 
@@ -526,7 +528,12 @@ async function refreshChat() {
     const a = rc.action || {};
     if (a.type === 'chat_input') { best = null; addBubble('you', 'typed', a.text); any = true; }
     else if (a.type === 'voice_input') { best = null; addBubble('you', 'VOICE · ' + (a.source || ''), a.transcript); any = true; }
-    else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', '', a.text, a.audio_path || streamed[rc.seq], best); any = true; }
+    else if (a.type === 'voice_output' && a.kind !== 'daemon') {
+      // When Andy voiced a shorter version, say so — the receipt keeps the exact words (spoken_text).
+      addBubble('andy', '', a.text, a.audio_path || streamed[rc.seq], best,
+        a.spoken_text ? '🔊 Said aloud: a short version — full answer below' : '');
+      any = true;
+    }
     else if (a.type === 'voice_stream') { /* its audio rides on the reply's bubble above */ }
     else if (a.type !== 'session_start') {
       const c = classify(a), s = SEV[c.tier] ?? 0;
