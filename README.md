@@ -11,7 +11,8 @@ can flip a byte and watch it fail. Nothing to install, nothing sent anywhere.
 **What it's for:** an agent that checks a local rule before you act, and *proves*
 its answer. It ships with one example — whether you can legally metal-detect at a
 given spot, where a wrong "allowed" can mean a fine. Rule-checking is the product;
-detecting is the example.
+detecting is the example. It runs a three-family Meta model pipeline: **Muse Spark**
+(reasoning), **SAM 3.1** (vision) and **Muse Voice** (speech in).
 
 Every action Andy takes — a tool call, an observation, even an unprompted
 remark — is written to a hash-chained receipt log *as part of taking it*, and
@@ -144,8 +145,8 @@ Developer** track · theme: **Build for Your World**.
 
 ## Meta models — which does what
 
-Three Meta models run in the live loop, each in one named place, and none of
-them decides whether an action runs:
+Three Meta model families run in the live loop (Muse Spark, SAM 3.1 and Muse
+Voice), each in one named place, and none of them decides whether an action runs:
 
 | Model | ID | Where it is called | What goes in, what comes back |
 |---|---|---|---|
