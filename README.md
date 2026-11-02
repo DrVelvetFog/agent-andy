@@ -4,6 +4,10 @@
 
 A personal agent that cannot act without leaving a receipt.
 
+Demo video (2:30, unlisted): https://www.youtube.com/watch?v=jH7AXl9KXJo
+
+Agent Andy was built Oct 26 to Nov 4, 2026, for this hackathon. Plummy and aee-e2 inspired it and are not part of this submission.
+
 **No clone needed:** [replay a recorded session in your browser](https://drvelvetfog.github.io/agent-andy/)
 — every hash is recomputed and the tip signature checked on your machine, and you
 can flip a byte and watch it fail. Nothing to install, nothing sent anywhere.
