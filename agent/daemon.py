@@ -84,7 +84,7 @@ class Daemon:
         }
         verdict = checker.evaluate(suggested)
         text = (f"Heads up — I staged {staged['label']} instead of answering it, "
-                f"because {staged['reason'] or 'it needs a human'}. "
+                f"because {(staged['reason'] or 'it needs a human').rstrip().rstrip('.')}. "
                 f"Want me to hold it for your review? Dismiss to silence me.")
 
         receipt = chain.append({
