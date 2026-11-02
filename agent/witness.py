@@ -43,8 +43,10 @@ def _verify(seg: dict | None, min_coverage: float, strict: bool) -> tuple[bool, 
 
 def record(chain, item: str, concept: str, photo_hash: str, verified: bool,
            reason: str, detections: int = 0, top_score=None, mask_id=None,
-           coverage: float = 0.0) -> dict:
-    """Write one witness-observation receipt (same chain as every other action)."""
+           coverage: float = 0.0, model: str | None = None) -> dict:
+    """Write one witness-observation receipt (same chain as every other action).
+    `model` names the model that looked at the photo (eyes.MODEL); it stays None
+    when no call was made, so a stub or an unreadable photo never reads as SAM."""
     receipt = chain.append({
         "type": "witness_observation",
         "summary": f"witness {item}: {'verified' if verified else 'UNVERIFIED'} ({concept})",
@@ -55,6 +57,7 @@ def record(chain, item: str, concept: str, photo_hash: str, verified: bool,
         "sam_detections": detections,
         "sam_coverage": coverage,     # fraction of the frame the largest mask covers
         "sam_top_score": top_score,   # None: SAM returns masks, not probabilities
+        "model": model,               # the model that looked (sam-3.1), null when none was called
         "verified": verified,
         "reason": reason,
         "checked": time.strftime("%Y-%m-%d", time.gmtime()),
@@ -75,10 +78,12 @@ def observe_and_verify(chain, item: str, concept: str, image_path: str,
         seg = eyes.segment(image_path, concept)
     except Exception as e:
         return record(chain, item, concept, photo_hash, False,
-                      f"SAM call failed ({type(e).__name__}) — unverified (fail closed)")
+                      f"SAM call failed ({type(e).__name__}) — unverified (fail closed)",
+                      model=eyes.MODEL)
     verified, reason, mask_id, detections, coverage = _verify(seg, min_coverage, strict)
     return record(chain, item, concept, photo_hash, verified, reason,
-                  detections=detections, top_score=None, mask_id=mask_id, coverage=coverage)
+                  detections=detections, top_score=None, mask_id=mask_id, coverage=coverage,
+                  model=eyes.MODEL)
 
 
 def finalize(chain, results: list[dict]) -> dict:

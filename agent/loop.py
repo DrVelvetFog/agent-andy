@@ -22,13 +22,15 @@ def run_turn(chain: ReceiptChain, utterance: str) -> list[dict]:
        any judgment or execution.
     3. for each step: check -> receipt -> act (only if allowed).
     """
-    plan = brain.propose_plan(utterance)
+    proposal = brain.propose(utterance)
+    plan = proposal["steps"]
     chain.append(
         {
             "type": "plan",
             "summary": f"plan for: {utterance[:80]}",
             "utterance": utterance,
             "steps": plan,
+            "planner": proposal["planner"],   # muse-spark-1.3, or the local echo fallback and why
         }
     )
 

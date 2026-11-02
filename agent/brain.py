@@ -88,8 +88,14 @@ def _message(role: str, text: str) -> dict:
     return {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]}
 
 
-def _coerce_plan(raw: str, utterance: str) -> list[dict]:
-    """Parse the planner's JSON; keep only well-formed, known-tool steps."""
+def _echo_step(utterance: str) -> list[dict]:
+    """The local fallback plan: one echo step, so a turn always has something to gate."""
+    return [{"tool": "echo", "summary": f"echo the request: {utterance[:80]}",
+             "args": {"text": utterance}}]
+
+
+def _parse_steps(raw: str) -> list[dict]:
+    """Parse the planner's JSON; keep only well-formed, known-tool steps (may be empty)."""
     text = raw.strip()
     if text.startswith("```"):  # strip a stray code fence, just in case
         text = text.strip("`")
@@ -114,21 +120,34 @@ def _coerce_plan(raw: str, utterance: str) -> list[dict]:
                     "args": {"text": str(args.get("text", "")).strip()},
                 }
             )
-    if not steps:  # never let a turn produce nothing to gate
-        steps = [{"tool": "echo", "summary": f"echo the request: {utterance[:80]}",
-                  "args": {"text": utterance}}]
     return steps[:3]
 
 
-def propose_plan(utterance: str, timeout: float = 60.0) -> list[dict]:
-    """Ask Spark for a plan. Falls back to a single echo step on any failure,
-    so the gated loop always has something to rule on and receipt."""
+def _coerce_plan(raw: str, utterance: str) -> list[dict]:
+    """Parse the planner's JSON, or the echo fallback when nothing usable came back."""
+    return _parse_steps(raw) or _echo_step(utterance)
+
+
+def propose(utterance: str, timeout: float = 60.0) -> dict:
+    """Ask Spark for a plan. Returns {"steps", "planner"}: planner is MODEL when
+    Spark's plan is the one being used, and otherwise names the local echo
+    fallback and why, so a plan receipt never reads as a Spark plan when Spark
+    was not reached or its reply was unusable."""
     try:
         data = _post_responses(
             [_message("system", _PLANNER_SYSTEM), _message("user", utterance)],
             timeout,
         )
-        return _coerce_plan(_output_text(data), utterance)
-    except Exception:
-        return [{"tool": "echo", "summary": f"echo the request: {utterance[:80]}",
-                 "args": {"text": utterance}}]
+    except Exception as e:
+        return {"steps": _echo_step(utterance),
+                "planner": f"local echo fallback — {MODEL} not reached ({type(e).__name__})"}
+    steps = _parse_steps(_output_text(data))
+    if not steps:
+        return {"steps": _echo_step(utterance),
+                "planner": f"local echo fallback — {MODEL} answered but its plan was unusable"}
+    return {"steps": steps, "planner": MODEL}
+
+
+def propose_plan(utterance: str, timeout: float = 60.0) -> list[dict]:
+    """The steps alone (see propose), for callers that only need the plan."""
+    return propose(utterance, timeout)["steps"]
