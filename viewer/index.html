@@ -409,8 +409,11 @@ function classify(a) {
   if (t === 'task_declined') return { tier: 'neutral', label: 'SKIPPED', reason: 'owner declined — note skipped, not written' };
   // SPOKE only when a voice was really rendered; otherwise TEXT ONLY, with the receipt's own reason.
   if (t === 'voice_output') return { tier: 'plan',
-    label: (a.kind === 'daemon' ? 'DAEMON ' : '') + (a.voiced ? 'SPOKE' : 'TEXT ONLY'),
-    reason: a.tts_engine ? 'voice: ' + a.tts_engine : (a.reason || 'text only') };
+    label: (a.kind === 'daemon' ? 'DAEMON ' : '') + (a.voiced ? 'SPOKE' : a.streaming ? 'SPEAKING' : 'TEXT ONLY'),
+    reason: a.streaming ? (a.reason || '') : a.tts_engine ? 'voice: ' + a.tts_engine : (a.reason || 'text only') };
+  // A streamed voice is receipted when its render ends, pointing back at the reply it voiced.
+  if (t === 'voice_stream') return { tier: 'plan', label: a.voiced ? 'SPOKE' : 'VOICE FAILED',
+    reason: a.reason || '' };
   if (t === 'chat_input') return { tier: 'plan', label: 'TYPED', reason: 'source: ' + (a.source || 'typed') };
   if (t === 'voice_input') return { tier: 'plan', label: 'VOICE', reason: 'source: ' + (a.source || ''), model: a.transcribe_model };
   if (t === 'plan') return { tier: 'plan', label: 'PLAN', reason: a.utterance || '', model: a.planner };
@@ -516,11 +519,15 @@ async function refreshChat() {
   if (receipts.some(rc => (rc.action || {}).type === 'session_start'))
     addSystemRow('session started — typed and voice both go through the checker');
   let any = false, best = null;   // best = {tier,label,sev} for the current turn
+  const streamed = {};            // reply seq -> its streamed audio, for the replay button
+  receipts.forEach(rc => { const a = rc.action || {};
+    if (a.type === 'voice_stream' && a.voiced) streamed[a.of_seq] = a.audio_path; });
   for (const rc of receipts) {
     const a = rc.action || {};
     if (a.type === 'chat_input') { best = null; addBubble('you', 'typed', a.text); any = true; }
     else if (a.type === 'voice_input') { best = null; addBubble('you', 'VOICE · ' + (a.source || ''), a.transcript); any = true; }
-    else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', '', a.text, a.audio_path, best); any = true; }
+    else if (a.type === 'voice_output' && a.kind !== 'daemon') { addBubble('andy', '', a.text, a.audio_path || streamed[rc.seq], best); any = true; }
+    else if (a.type === 'voice_stream') { /* its audio rides on the reply's bubble above */ }
     else if (a.type !== 'session_start') {
       const c = classify(a), s = SEV[c.tier] ?? 0;
       if (!best || s > best.sev) best = { tier: c.tier, label: c.label, sev: s };
@@ -551,8 +558,57 @@ function updateDaemon(receipts) {
 // click stays allowed for the rest of the page.
 const SILENT_WAV = 'data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 let player = null;
+let audioCtx = null;   // plays streamed replies; unlocked in the same click
 function primeAudio() {
   try { if (!player) player = new Audio(); player.src = SILENT_WAV; player.play().catch(() => {}); } catch (e) {}
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+
+// Play a reply's voice AS ElevenLabs renders it: raw 16-bit mono PCM, scheduled on
+// Web Audio in ~quarter-second blocks, gap-free. Resolves when playback ends.
+async function playStream(id, rate) {
+  if (!audioCtx) return;
+  let res;
+  try { res = await fetch('/api/voice-stream?id=' + encodeURIComponent(id)); } catch (e) { return; }
+  if (!res.ok || !res.body) return;
+  const reader = res.body.getReader();
+  let carry = new Uint8Array(0), pending = [], pendingLen = 0, at = 0;
+  const flush = () => {
+    if (!pendingLen) return;
+    const buf = audioCtx.createBuffer(1, pendingLen, rate), ch = buf.getChannelData(0);
+    let o = 0;
+    for (const p of pending) { ch.set(p, o); o += p.length; }
+    pending = []; pendingLen = 0;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.connect(audioCtx.destination);
+    at = Math.max(at, audioCtx.currentTime + 0.05);
+    src.start(at); at += buf.duration;
+  };
+  for (;;) {
+    let r;
+    try { r = await reader.read(); } catch (e) { break; }
+    if (r.done) break;
+    const bytes = new Uint8Array(carry.length + r.value.length);
+    bytes.set(carry); bytes.set(r.value, carry.length);
+    const n = bytes.length >> 1, view = new DataView(bytes.buffer), f = new Float32Array(n);
+    for (let i = 0; i < n; i++) f[i] = view.getInt16(i * 2, true) / 32768;
+    carry = bytes.slice(n * 2);
+    pending.push(f); pendingLen += n;
+    if (pendingLen >= rate / 4) flush();
+  }
+  flush();
+  await new Promise(r => setTimeout(r, Math.max(0, (at - audioCtx.currentTime) * 1000)));
+}
+
+// After a turn: stream the voice if it is streaming, else play the clip. Once a stream
+// ends its voice_stream receipt exists, so redraw to show it (and the replay button).
+function voiceReply(res) {
+  if (res.stream_id) playStream(res.stream_id, res.stream_rate || 24000)
+    .then(async () => { await refreshChat(); await loadChain(chatChainName); });
+  else if (res.audio_path) playAudio(res.audio_path);
 }
 function playAudio(path) {
   try { const p = player || new Audio(); p.src = '/audio?path=' + encodeURIComponent(path); p.play().catch(() => {}); } catch (e) {}
@@ -617,7 +673,7 @@ async function send() {
       sel.value = chatChainName;
       await loadChain(chatChainName);
       await refreshPending();
-      if (res.audio_path) playAudio(res.audio_path);
+      voiceReply(res);
     }
   } finally {
     if (answering.isConnected) answering.remove();   // a failed send never redraws the chat
@@ -793,7 +849,7 @@ async function micStop() {
     sel.value = chatChainName;
     await loadChain(chatChainName);
     await refreshPending();
-    if (res.audio_path) playAudio(res.audio_path);
+    voiceReply(res);
     micState('idle', 'Heard: “' + res.transcript + '”');
   } finally { micHold(false); }
 }

@@ -23,11 +23,16 @@ session, never about people, text fields, or off-task content.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import os
 import re
+import threading
+import time
 import urllib.request
 import uuid
+import wave
 from pathlib import Path
 
 from . import checker, detect, loop, policy, task, tier2, tts, witness
@@ -115,7 +120,7 @@ def route(transcript: str) -> tuple[str, str | None]:
 def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
           voice_id: str | None = None, model_id: str | None = None,
           kind: str = "reply", off_reason: str | None = None,
-          spoken: str | None = None) -> dict:
+          spoken: str | None = None, stream: bool = False) -> dict:
     """Voice-OUT: show the text AND render it to speech with ElevenLabs. Text is
     always returned; the voice is best-effort — if the key is missing or the call
     fails, Andy falls back to text and says so, never faking a voice. When a chain
@@ -124,10 +129,36 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
     a key is reachable; `play=True` also plays it aloud (off in tests). `spoken` is a
     short version to voice instead of the full text (a long reply takes as long to
     render as it does to hear); the receipt keeps both, so it records exactly what
-    was said aloud."""
+    was said aloud. `stream=True` (with a chain) starts the voice in the background
+    and returns at once: this receipt is written now, marked streaming, and a
+    `voice_stream` receipt with the audio's hash follows when the render ends."""
     want_voice = tts.available() if voice == "auto" else bool(voice)
     result = {"text": text, "tts_engine": None, "voiced": False, "spoken_aloud": False}
     say = spoken or text
+
+    if want_voice and stream and chain is not None:
+        vid, mid = voice_id or tts.DEFAULT_VOICE_ID, model_id or tts.DEFAULT_MODEL
+        receipt = chain.append({
+            "type": "voice_output",
+            "summary": f"speaking (streamed): {say[:70]}",
+            "text": text,
+            "spoken_text": say if spoken else None,
+            "kind": kind,
+            "tts_engine": "elevenlabs", "tts_model": mid, "voice_id": vid,
+            "rendered": "external",
+            "voiced": False,            # not yet: the voice_stream receipt says whether it was
+            "streaming": True,
+            "spoken_aloud": False,
+            "reason": "voice streaming from ElevenLabs as it renders; the audio and its hash "
+                      "land in the voice_stream receipt that follows",
+        })
+        job = _VoiceStream(chain, say, receipt["seq"], vid, mid, kind)
+        _STREAMS[job.id] = job
+        for old in [k for k, j in _STREAMS.items() if j.done][: max(0, len(_STREAMS) - _STREAMS_KEEP)]:
+            del _STREAMS[old]
+        result.update({"tts_engine": "elevenlabs", "streaming": True, "stream_id": job.id,
+                       "stream_rate": tts.STREAM_RATE, "voice_id": vid, "model_id": mid})
+        return result
 
     if want_voice:
         synth = tts.synthesize(say, voice_id=voice_id or tts.DEFAULT_VOICE_ID,
@@ -179,6 +210,91 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
             "reason": why,
         })
     return result
+
+
+class _VoiceStream:
+    """One streamed reply. A background thread pulls PCM from ElevenLabs into a
+    buffer the page can read while it fills; when the render ends it saves the
+    audio as a WAV and appends the `voice_stream` receipt (hash, path) — or a
+    failure receipt. It runs to the end whether or not a page ever reads it, so
+    every streamed voice is receipted."""
+
+    def __init__(self, chain, say: str, of_seq: int, voice_id: str, model_id: str, kind: str):
+        self.id = uuid.uuid4().hex
+        self.chunks: list[bytes] = []
+        self.done = False
+        self.cond = threading.Condition()
+        self._args = (chain, say, of_seq, voice_id, model_id, kind)
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        chain, say, of_seq, voice_id, model_id, kind = self._args
+        error = None
+        try:
+            for chunk in tts.stream(say, voice_id=voice_id, model_id=model_id):
+                with self.cond:
+                    self.chunks.append(chunk)
+                    self.cond.notify_all()
+        except Exception as e:   # recorded below; never raised into the page
+            error = f"{type(e).__name__}: {str(e)[:120]}"
+        pcm = b"".join(self.chunks)
+        receipt = {"type": "voice_stream", "of_seq": of_seq, "kind": kind,
+                   "tts_engine": "elevenlabs", "tts_model": model_id, "voice_id": voice_id,
+                   "rendered": "external", "streamed": True}
+        if pcm and not error:
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as w:
+                w.setnchannels(1); w.setsampwidth(2); w.setframerate(tts.STREAM_RATE)
+                w.writeframes(pcm[: len(pcm) // 2 * 2])
+            audio = buf.getvalue()
+            sha = hashlib.sha256(audio).hexdigest()
+            tts.VOICE_OUT_DIR.mkdir(parents=True, exist_ok=True)
+            path = tts.VOICE_OUT_DIR / f"andy-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{sha[:8]}.wav"
+            path.write_bytes(audio)
+            rel = path.relative_to(tts.ROOT) if path.is_relative_to(tts.ROOT) else path
+            receipt.update({"summary": f"spoke (streamed): {say[:70]}", "voiced": True,
+                            "audio_path": str(rel), "audio_sha256": sha,
+                            "duration_s": round(len(pcm) / 2 / tts.STREAM_RATE, 2),
+                            "reason": f"streamed by ElevenLabs as it rendered; audio of receipt #{of_seq}"})
+        else:
+            receipt.update({"summary": f"voice stream failed: {say[:60]}", "voiced": False,
+                            "reason": f"text only — voice stream failed ({error or 'no audio'})"})
+        chain.append(receipt)
+        with self.cond:
+            self.done = True
+            self.cond.notify_all()
+
+
+_STREAMS: dict[str, _VoiceStream] = {}
+_STREAMS_KEEP = 20   # recent streams the page may still read; older ones are dropped
+
+
+def stream_chunks(stream_id: str):
+    """Yield a streamed reply's PCM as it arrives, then stop when the render ends.
+    Unknown ids yield nothing."""
+    job = _STREAMS.get(stream_id)
+    if job is None:
+        return
+    i = 0
+    while True:
+        with job.cond:
+            while i >= len(job.chunks) and not job.done:
+                job.cond.wait(timeout=30)
+            new, finished = job.chunks[i:], job.done
+        i += len(new)
+        if new:
+            yield b"".join(new)
+        elif finished:
+            return
+
+
+def wait_stream(stream_id: str, timeout: float = 120.0) -> bool:
+    """Block until a stream has finished and its receipt is written (tests, CLI)."""
+    job = _STREAMS.get(stream_id)
+    if job is None:
+        return False
+    with job.cond:
+        return job.cond.wait_for(lambda: job.done, timeout=timeout)
 
 
 def _play(rel_path: str) -> bool:
@@ -371,7 +487,7 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
               play: bool = False, run_general: bool = True, strict: bool = False,
               store=None, demo: bool = False, source: str = TYPED,
-              daemon_voice: str | bool | None = None) -> dict:
+              daemon_voice: str | bool | None = None, stream_voice: bool = False) -> dict:
     """One chat message — typed, or a live transcript from the viewer's mic —
     through the SAME gate, with every intent (approve, decline, verify, trips).
 
@@ -387,7 +503,8 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     staged message never approves. General chat that is allowed goes to the Spark
     loop, where every proposed step is checked again. A daemon, if given, may then
     surface ONE suggestion after a staged result. `daemon_voice` voices that
-    suggestion separately from the reply (default: same as `voice`).
+    suggestion separately from the reply (default: same as `voice`). `stream_voice`
+    streams the reply's voice (the page plays it as it renders; see speak()).
     """
     if demo:
         # "Try to break it" mode: the SAME checker and receipts as normal chat, with
@@ -507,7 +624,7 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             reply_text = "That's within policy; no tool is wired for it in this mode."
             payload = {"intent": "general", "verdict": verdict, "outcomes": []}
 
-    reply = speak(reply_text, chain, voice=voice, play=play, spoken=spoken_text,
+    reply = speak(reply_text, chain, voice=voice, play=play, spoken=spoken_text, stream=stream_voice,
                   off_reason="voice is off in Try to break it mode (no voice, no model calls)" if demo else None)
     daemon_mode = voice if daemon_voice is None else daemon_voice
     daemon_info = daemon.observe(chain, daemon_src, voice_mode=daemon_mode) if daemon is not None else None

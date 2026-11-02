@@ -68,6 +68,32 @@ def _load_key() -> str | None:
     return None
 
 
+STREAM_FORMAT = "pcm_24000"   # raw 16-bit mono PCM: the page can play it as it arrives
+STREAM_RATE = 24000
+
+
+def stream(text: str, voice_id: str = DEFAULT_VOICE_ID, model_id: str = DEFAULT_MODEL,
+           timeout: float = 120.0):
+    """Yield raw PCM chunks as ElevenLabs renders them (the /stream endpoint), so a
+    reply can start playing in about a second instead of after the whole render.
+    Raises on a missing key or a failed call; the caller records the failure."""
+    key = _load_key()
+    if not key:
+        raise RuntimeError("ELEVENLABS_API_KEY not set")
+    req = urllib.request.Request(
+        f"{BASE_URL}/text-to-speech/{voice_id}/stream?output_format={STREAM_FORMAT}",
+        data=json.dumps({"text": text, "model_id": model_id,
+                         "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}}).encode("utf-8"),
+        method="POST", headers={"xi-api-key": key, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        while True:
+            chunk = resp.read1(8192)
+            if not chunk:
+                return
+            yield chunk
+
+
 def available() -> bool:
     """True if a key is reachable — the caller uses this to pick voice vs text."""
     return _load_key() is not None

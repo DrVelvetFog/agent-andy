@@ -119,7 +119,7 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True,
     # voiced here: rendering it held every staged reply back ~8 s for nothing.
     res = voice.chat_turn(chain, message, daemon=CHAT["daemon"], store=CHAT["store"],
                           voice=voice_mode, run_general=run_general, demo=demo, source=source,
-                          daemon_voice=False)
+                          daemon_voice=False, stream_voice=True)
     reply = res["reply"]
     d = res.get("daemon")
     daemon_out = ({"text": d["text"], "about": d.get("about"),
@@ -131,6 +131,8 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True,
         "reply_text": res["reply_text"],
         "source": res["source"],                 # "typed" or "live-transcribe", never blurred
         "audio_path": reply.get("audio_path"),    # the browser plays it, if voiced
+        "stream_id": reply.get("stream_id"),      # ...or plays this stream as it renders
+        "stream_rate": reply.get("stream_rate"),
         "tts_engine": reply.get("tts_engine"),
         "daemon": daemon_out,                     # only present if the daemon really spoke
         "daemon_available": _DAEMON_AVAILABLE,
@@ -361,6 +363,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(pending_list())
         elif u.path == "/audio":
             self._serve_audio((q.get("path") or [""])[0])
+        elif u.path == "/api/voice-stream":
+            self._serve_stream((q.get("id") or [""])[0])
         else:
             self._json({"error": "not found"}, 404)
 
@@ -439,8 +443,25 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json({"error": "not found"}, 404)
 
+    def _serve_stream(self, stream_id: str) -> None:
+        """Stream a reply's raw PCM (16-bit mono, see X-Sample-Rate) as ElevenLabs
+        renders it. The body simply ends when the render does (HTTP/1.0, no length).
+        A page that goes away mid-stream changes nothing: the render and its receipt
+        finish in the background regardless."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("X-Sample-Rate", str(voice.tts.STREAM_RATE))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            for chunk in voice.stream_chunks(stream_id):
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _serve_audio(self, rel: str) -> None:
-        """Serve a rendered voice clip — only files under runs/, mp3 only."""
+        """Serve a rendered voice clip — only files under runs/, mp3 or wav only."""
         if not rel:
             self._json({"error": "no path"}, 400)
             return
@@ -450,12 +471,12 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._json({"error": "forbidden"}, 403)
             return
-        if not p.exists() or p.suffix != ".mp3":
+        if not p.exists() or p.suffix not in (".mp3", ".wav"):
             self._json({"error": "not found"}, 404)
             return
         data = p.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Type", "audio/mpeg" if p.suffix == ".mp3" else "audio/wav")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
