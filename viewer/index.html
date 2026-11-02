@@ -884,6 +884,8 @@ $('#daemonDismiss').addEventListener('click', async () => {
 $('#chain').addEventListener('change', e => loadChain(e.target.value));
 $('#replay').addEventListener('click', () => { setBadge('', 'replaying…'); renderTimeline(true); });
 $('#verify').addEventListener('click', async () => {
+  // A flip's red mark was on a throwaway copy; verifying the real chain clears it.
+  view.querySelectorAll('.receipt.tampered').forEach(e => { e.classList.remove('tampered'); setOpen(e, false); });
   setBadge('', 'verifying…');
   const r = await fetch('/api/verify?name=' + encodeURIComponent($('#chain').value)).then(x => x.json());
   // Three states, never conflated: signature VERIFIED, UNSIGNED, or FAIL.
