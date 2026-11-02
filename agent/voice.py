@@ -114,18 +114,23 @@ def route(transcript: str) -> tuple[str, str | None]:
 
 def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
           voice_id: str | None = None, model_id: str | None = None,
-          kind: str = "reply", off_reason: str | None = None) -> dict:
+          kind: str = "reply", off_reason: str | None = None,
+          spoken: str | None = None) -> dict:
     """Voice-OUT: show the text AND render it to speech with ElevenLabs. Text is
     always returned; the voice is best-effort — if the key is missing or the call
     fails, Andy falls back to text and says so, never faking a voice. When a chain
     is given, a `voice_output` receipt records the engine and a hash of the audio,
     so the spoken reply carries its own provenance. `voice="auto"` voices only when
-    a key is reachable; `play=True` also plays it aloud (off in tests)."""
+    a key is reachable; `play=True` also plays it aloud (off in tests). `spoken` is a
+    short version to voice instead of the full text (a long reply takes as long to
+    render as it does to hear); the receipt keeps both, so it records exactly what
+    was said aloud."""
     want_voice = tts.available() if voice == "auto" else bool(voice)
     result = {"text": text, "tts_engine": None, "voiced": False, "spoken_aloud": False}
+    say = spoken or text
 
     if want_voice:
-        synth = tts.synthesize(text, voice_id=voice_id or tts.DEFAULT_VOICE_ID,
+        synth = tts.synthesize(say, voice_id=voice_id or tts.DEFAULT_VOICE_ID,
                                model_id=model_id or tts.DEFAULT_MODEL)
         if synth.get("ok"):
             result.update({
@@ -143,7 +148,10 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
         # Say what really happened: "spoke" only when a voice was rendered. A text-only
         # reply says why — voice deliberately off (off_reason, e.g. Try to break it), off
         # for this turn, a failed call, or no engine reachable.
-        if result["voiced"]:
+        if result["voiced"] and spoken:
+            why = ("rendered by ElevenLabs from a short spoken version (spoken_text) of the "
+                   "text Andy already decided and receipted; the full text is shown")
+        elif result["voiced"]:
             why = "rendered by ElevenLabs from text Andy already decided and receipted"
         elif result.get("tts_error"):
             why = f"text only — voice call failed ({result['tts_error']})"
@@ -155,8 +163,9 @@ def speak(text: str, chain=None, voice: str | bool = "auto", play: bool = False,
             why = "text only — no voice engine reachable"
         chain.append({
             "type": "voice_output",
-            "summary": f"{'spoke' if result['voiced'] else 'replied (text only)'}: {text[:70]}",
+            "summary": f"{'spoke' if result['voiced'] else 'replied (text only)'}: {(say if result['voiced'] else text)[:70]}",
             "text": text,
+            "spoken_text": say if result["voiced"] and spoken else None,   # what was voiced, when shorter
             "kind": kind,              # "reply" (Andy answering) or "daemon" (the proactive beat)
             "tts_engine": result["tts_engine"],
             "tts_model": result.get("model_id"),
@@ -230,6 +239,19 @@ def _detect_reply(o: dict) -> str:
     return reply
 
 
+def _detect_spoken(o: dict) -> str | None:
+    """A short version of a STAGED reply to voice: the staging verdict and the first
+    sentence of its reason. The full reply (reason, candidate page, URL) stays on
+    screen. An answered or refused reply is short already, so it is voiced as is."""
+    if _not_looked_up(o) or o["decision"] in (detect.ANSWERED, detect.ANSWERED_WITH_CAVEAT):
+        return None
+    first = re.split(r"(?<=[.!?])\s+", (o.get("staging_reason") or "").strip(), maxsplit=1)[0]
+    spoken = f"I'm staging that one as unverified — {first}" if first else "I'm staging that one as unverified."
+    if o.get("tier2_candidates"):
+        spoken += " There's a candidate page to check. Say verify it, and I'll fetch it."
+    return spoken
+
+
 def _verify_candidate(chain, place, store) -> dict:
     """Resolve the candidate page (a named place via Tier 2, or the last staged one)
     and ask the store to fetch + extract it into a pending proposal. Builds the
@@ -251,7 +273,9 @@ def _verify_candidate(chain, place, store) -> dict:
              f"{p['source']}, and quotes: “{p['quote'][:160]}”. That's a SECONDARY source — "
              "I read your site, not the ordinance itself. Say “approve” to use it, or I'll "
              "keep holding it.")
-    return {"ok": True, "proposal": p, "reply": reply}
+    spoken = (f"I fetched the page for {p['place']}. It reads {p['verdict']}. That's a secondary "
+              "source — I read your site, not the ordinance. Say approve to use it.")
+    return {"ok": True, "proposal": p, "reply": reply, "spoken": spoken}
 
 
 def _raw_verdict(message: str) -> dict:
@@ -323,7 +347,7 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
     if intent == "detect":
         res = detect.answer(chain, arg, strict=strict, store=store)
         o = detect.outcome_of(res, arg)
-        reply = speak(_detect_reply(o), chain, voice=voice)
+        reply = speak(_detect_reply(o), chain, voice=voice, spoken=_detect_spoken(o))
         result = {"intent": "detect", "source": source, "place": arg,
                   "result": res, "reply": reply}
         # One staged-receipt suggestion, at most, this task — but never an offer to
@@ -346,7 +370,8 @@ def handle(chain, transcript: str, source: str, photos=None, strict: bool = Fals
 
 def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
               play: bool = False, run_general: bool = True, strict: bool = False,
-              store=None, demo: bool = False, source: str = TYPED) -> dict:
+              store=None, demo: bool = False, source: str = TYPED,
+              daemon_voice: str | bool | None = None) -> dict:
     """One chat message — typed, or a live transcript from the viewer's mic —
     through the SAME gate, with every intent (approve, decline, verify, trips).
 
@@ -361,7 +386,8 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
     approve/decline must be exact (a bare word, or the pending item's name), and a
     staged message never approves. General chat that is allowed goes to the Spark
     loop, where every proposed step is checked again. A daemon, if given, may then
-    surface ONE suggestion after a staged result.
+    surface ONE suggestion after a staged result. `daemon_voice` voices that
+    suggestion separately from the reply (default: same as `voice`).
     """
     if demo:
         # "Try to break it" mode: the SAME checker and receipts as normal chat, with
@@ -396,9 +422,11 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         intent = "general"   # not an exact approval/decline — the raw verdict stands
     cite, gate = _gate(chain, message, intent, verdict)
     daemon_src = None
+    spoken_text = None   # a shorter version to voice, for the long replies only
     if intent == "verify":
         res = _verify_candidate(chain, arg, store)
         reply_text = res["reply"]
+        spoken_text = res.get("spoken")
         payload = {"intent": "verify", "result": res}
     elif intent == "approve":
         if store is None:
@@ -446,6 +474,7 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
         res = detect.answer(chain, arg, strict=strict, store=store)
         o = detect.outcome_of(res, arg)
         reply_text = _detect_reply(o)
+        spoken_text = _detect_spoken(o)
         daemon_src = None if _not_looked_up(o) else res   # no offer on a checker-refused lookup
         payload = {"intent": "detect", "place": arg, "result": res}
     elif intent == "witness":
@@ -478,7 +507,8 @@ def chat_turn(chain, message: str, daemon=None, voice: str | bool = "auto",
             reply_text = "That's within policy; no tool is wired for it in this mode."
             payload = {"intent": "general", "verdict": verdict, "outcomes": []}
 
-    reply = speak(reply_text, chain, voice=voice, play=play,
+    reply = speak(reply_text, chain, voice=voice, play=play, spoken=spoken_text,
                   off_reason="voice is off in Try to break it mode (no voice, no model calls)" if demo else None)
-    daemon_info = daemon.observe(chain, daemon_src, voice_mode=voice) if daemon is not None else None
+    daemon_mode = voice if daemon_voice is None else daemon_voice
+    daemon_info = daemon.observe(chain, daemon_src, voice_mode=daemon_mode) if daemon is not None else None
     return {**payload, "source": source, "reply_text": reply_text, "reply": reply, "daemon": daemon_info}

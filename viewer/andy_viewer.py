@@ -115,8 +115,11 @@ def chat_message(message: str, voice_mode="auto", run_general: bool = True,
     if not message or not message.strip():
         return {"error": "empty message"}
     chain = CHAT["chain"]
+    # The page shows the daemon as a card and never plays its audio, so it is not
+    # voiced here: rendering it held every staged reply back ~8 s for nothing.
     res = voice.chat_turn(chain, message, daemon=CHAT["daemon"], store=CHAT["store"],
-                          voice=voice_mode, run_general=run_general, demo=demo, source=source)
+                          voice=voice_mode, run_general=run_general, demo=demo, source=source,
+                          daemon_voice=False)
     reply = res["reply"]
     d = res.get("daemon")
     daemon_out = ({"text": d["text"], "about": d.get("about"),

@@ -339,7 +339,9 @@ voice is the one part of the loop that is *not* a Meta model and *not* local:
 `agent/tts.py` renders the reply with ElevenLabs (`eleven_v4`) over the public
 REST API — same stdlib `urllib`, no SDK. That is stated, not hidden: a
 `voice_output` receipt records the engine, model, voice, and a hash of the audio
-(`rendered: "external"`), so the chain shows where the voice came from. The key
+(`rendered: "external"`), so the chain shows where the voice came from. A long
+reply (a staged answer, a verify proposal) is voiced as a short version and shown
+in full; the receipt keeps both, the voiced words as `spoken_text`. The key
 lives in `.env.local` (gitignored, read from `ELEVENLABS_API_KEY`); if it is
 missing or the call fails, Andy falls back to text and never fakes a voice.
 *Next:* pick voice vs. text automatically from whether headphones are connected.

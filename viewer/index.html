@@ -603,6 +603,8 @@ async function send() {
   primeAudio();
   input.value = ''; input.disabled = true; btn.disabled = true; mic.disabled = true;
   addBubble('you', 'typed', msg);                 // optimistic echo; replaced by refreshChat
+  addBubble('andy', 'answering…', '');            // so the wait for a voiced reply isn't dead air
+  const answering = convo.lastElementChild;
   try {
     const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg }) }).then(x => x.json());
@@ -617,7 +619,10 @@ async function send() {
       await refreshPending();
       if (res.audio_path) playAudio(res.audio_path);
     }
-  } finally { input.disabled = false; btn.disabled = false; mic.disabled = !!micDead; input.focus(); }
+  } finally {
+    if (answering.isConnected) answering.remove();   // a failed send never redraws the chat
+    input.disabled = false; btn.disabled = false; mic.disabled = !!micDead; input.focus();
+  }
 }
 
 // Approve / Decline a pending proposal — the buttons send the SAME "approve <place>"
