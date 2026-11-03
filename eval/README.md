@@ -105,6 +105,6 @@ python3 scripts/witness_acceptance.py --selftest
   here times it.
 - Anyone but the author: no user study, no judge trial.
 
-The whole set runs as one command, `python3 -m unittest discover tests`: 22
-suites, 18 pass, 4 skip with a stated reason (the key-, clip-, photo-, and
+The whole set runs as one command, `python3 -m unittest discover tests`: 23
+suites, 19 pass, 4 skip with a stated reason (the key-, clip-, photo-, and
 Mac-app-gated runs), 0 fail, in about 20 seconds.

@@ -69,7 +69,7 @@ Measured by the acceptance suites in this repo, with no API key:
 | Concurrent writes | 50 of 50 simultaneous-append trials leave a chain that verifies | `scripts/verifier_acceptance.py` |
 | Concurrent processes | 4 processes × 25 appends: 100 receipts, none lost or duplicated, signed tip VERIFIED | `scripts/multiprocess_acceptance.py` |
 | Chain and earned-answer signing | a rewrite with recomputed hashes, a truncated tail, a tampered or foreign signature: FAIL; no signature: UNSIGNED; a forged earned answer: staged | `scripts/signing_acceptance.py` |
-| All suites | 18 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
+| All suites | 19 pass, 4 skip with a stated reason, 0 fail | `python3 -m unittest discover tests` |
 
 Every number above comes from a suite you can run; [`eval/`](eval/README.md)
 collects them with their commands, plus the over-blocking probe and the tamper
