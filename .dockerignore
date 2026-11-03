@@ -1,0 +1,5 @@
+.git
+runs/
+.env*
+AgentAndy.app
+**/__pycache__
