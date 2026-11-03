@@ -54,6 +54,17 @@ receipt count and the receipt the flip lands on can differ on your run.
 
 ![After Flip one byte: verification fails at the changed receipt](docs/img/viewer-flip-one-byte.png)
 
+## Check it in Docker
+
+```bash
+docker build -t agent-andy .
+docker run --rm agent-andy
+```
+
+This runs the offline test suite, then verifies the recorded 33-receipt chain and its
+signature. No key, no network. It verifies only: it does not serve the viewer, which
+binds 127.0.0.1 only. Use `./start-andy.sh` for that.
+
 ## Results
 
 Measured by the acceptance suites in this repo, with no API key:
